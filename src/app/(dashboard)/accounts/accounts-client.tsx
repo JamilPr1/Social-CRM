@@ -19,9 +19,10 @@ export function AccountsClient({
 }) {
   const [linkedIn, setLinkedIn] = useState<{
     authenticated: boolean;
+    shared: boolean;
     personName: string | null;
     email: string | null;
-  }>({ authenticated: false, personName: null, email: null });
+  }>({ authenticated: false, shared: false, personName: null, email: null });
 
   useEffect(() => {
     fetch("/api/linkedin/status")
@@ -29,6 +30,7 @@ export function AccountsClient({
       .then((d) =>
         setLinkedIn({
           authenticated: Boolean(d.auth?.authenticated),
+          shared: Boolean(d.auth?.shared),
           personName: d.auth?.personName || d.auth?.profile?.name || null,
           email: d.auth?.profile?.email || null,
         })
@@ -47,7 +49,7 @@ export function AccountsClient({
 
   async function disconnectLinkedIn() {
     await fetch("/api/linkedin/status", { method: "DELETE" });
-    setLinkedIn({ authenticated: false, personName: null, email: null });
+    setLinkedIn({ authenticated: false, shared: false, personName: null, email: null });
   }
 
   return (
@@ -56,7 +58,9 @@ export function AccountsClient({
         <div>
           <h1 className="text-2xl font-bold">Accounts</h1>
           <p className="text-[var(--muted)] mt-1">
-            Connect Facebook, Instagram, and LinkedIn
+            {isAdmin
+              ? "Connect Facebook, Instagram, and LinkedIn for your team"
+              : "Organization accounts connected by your admin"}
           </p>
         </div>
         {isAdmin && (
@@ -85,7 +89,7 @@ export function AccountsClient({
         </div>
       )}
 
-      {errorCode === "no_pages" && (
+      {errorCode === "no_pages" && isAdmin && (
         <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5 text-sm">
           <p className="font-medium text-yellow-300">No Facebook Pages found</p>
           <p className="text-[var(--muted)] mt-2">
@@ -103,7 +107,11 @@ export function AccountsClient({
 
           {accounts.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-[var(--muted)] mb-4">No Meta pages connected</p>
+              <p className="text-[var(--muted)] mb-4">
+                {isAdmin
+                  ? "No Meta pages connected"
+                  : "No Meta pages connected yet. Ask your admin to connect accounts."}
+              </p>
               {isAdmin && (
                 <button
                   onClick={() => connectMeta(false, false)}
@@ -161,33 +169,43 @@ export function AccountsClient({
                 {linkedIn.email && (
                   <p className="text-sm text-[var(--muted)] mt-1">{linkedIn.email}</p>
                 )}
-                <p className="text-sm text-[var(--success)] mt-2">Connected</p>
+                <p className="text-sm text-[var(--success)] mt-2">
+                  {linkedIn.shared ? "Connected by admin · shared with team" : "Connected"}
+                </p>
               </div>
-              <div className="flex gap-3">
-                <a
-                  href="/api/linkedin/connect"
-                  className="text-sm px-4 py-2 rounded-lg border border-[#0a66c2] text-[#0a66c2] hover:bg-[#0a66c2]/10"
-                >
-                  Reconnect
-                </a>
-                <button
-                  onClick={disconnectLinkedIn}
-                  className="text-sm px-4 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--card-hover)]"
-                >
-                  Disconnect
-                </button>
-              </div>
+              {isAdmin && !linkedIn.shared && (
+                <div className="flex gap-3">
+                  <a
+                    href="/api/linkedin/connect"
+                    className="text-sm px-4 py-2 rounded-lg border border-[#0a66c2] text-[#0a66c2] hover:bg-[#0a66c2]/10"
+                  >
+                    Reconnect
+                  </a>
+                  <button
+                    onClick={disconnectLinkedIn}
+                    className="text-sm px-4 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--card-hover)]"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-[var(--muted)] mb-4">Connect LinkedIn to publish from Posts</p>
-              <a
-                href="/api/linkedin/connect"
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm bg-[#0a66c2] text-white"
-              >
-                <Linkedin className="w-4 h-4" />
-                Connect LinkedIn
-              </a>
+              <p className="text-[var(--muted)] mb-4">
+                {isAdmin
+                  ? "Connect LinkedIn to publish from Posts"
+                  : "LinkedIn is not connected yet. Ask your admin to connect it."}
+              </p>
+              {isAdmin && (
+                <a
+                  href="/api/linkedin/connect"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm bg-[#0a66c2] text-white"
+                >
+                  <Linkedin className="w-4 h-4" />
+                  Connect LinkedIn
+                </a>
+              )}
             </div>
           )}
         </section>

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
+import { withAuth, apiSuccess, apiError } from "@/lib/api-helpers";
 import { getAccountWithAccess, getAccessibleAccountIds } from "@/lib/accounts";
 import { syncAllForAccount, syncPostsForAccount } from "@/lib/sync";
 import { prisma } from "@/lib/prisma";
@@ -11,7 +11,7 @@ import {
   syncLinkedInPosts,
   mapLinkedInPostToUnified,
 } from "@/lib/linkedin-posts";
-import { getLinkedInConnection } from "@/lib/linkedin-api";
+import { getLinkedInConnection, resolveLinkedInOwnerId } from "@/lib/linkedin-api";
 
 type PlatformFilter = "all" | "facebook" | "instagram" | "linkedin";
 
@@ -39,8 +39,10 @@ export async function GET(request: NextRequest) {
     let linkedInSyncNote: string | null = null;
 
     if (platform === "linkedin" || platform === "all") {
-      if (sync) {
-        const syncResult = await syncLinkedInPosts(user.id, true);
+      const linkedInOwnerId = await resolveLinkedInOwnerId(user.id);
+
+      if (sync && linkedInOwnerId) {
+        const syncResult = await syncLinkedInPosts(linkedInOwnerId, true);
         if (syncResult.apiError && syncResult.imported === 0 && (syncResult.dbCount ?? 0) === 0) {
           linkedInSyncNote = syncResult.apiError;
         } else if (syncResult.apiError && syncResult.imported === 0) {
@@ -48,15 +50,17 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const conn = await getLinkedInConnection(user.id);
-      const personName = conn?.personName || "LinkedIn";
-      const liPosts = await listLinkedInPosts(user.id);
-      const published = liPosts.filter((p) =>
-        platform === "all" ? true : p.status === "published" || p.status === "scheduled" || p.status === "draft"
-      );
+      if (linkedInOwnerId) {
+        const conn = await getLinkedInConnection(linkedInOwnerId);
+        const personName = conn?.personName || "LinkedIn";
+        const liPosts = await listLinkedInPosts(linkedInOwnerId);
+        const published = liPosts.filter((p) =>
+          platform === "all" ? true : p.status === "published" || p.status === "scheduled" || p.status === "draft"
+        );
 
-      for (const post of published) {
-        results.push(mapLinkedInPostToUnified(post, personName));
+        for (const post of published) {
+          results.push(mapLinkedInPostToUnified(post, personName));
+        }
       }
     }
 

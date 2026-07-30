@@ -1,7 +1,7 @@
 import { getSessionUser } from "@/lib/auth";
 import { getAccessibleAccountIds } from "@/lib/accounts";
 import { prisma } from "@/lib/prisma";
-import { getLinkedInConnection } from "@/lib/linkedin-api";
+import { getLinkedInConnection, resolveLinkedInOwnerId } from "@/lib/linkedin-api";
 import { getLinkedInDashboardStats } from "@/lib/linkedin-posts";
 
 export default async function DashboardPage() {
@@ -9,7 +9,10 @@ export default async function DashboardPage() {
   if (!user) return null;
 
   const accountIds = await getAccessibleAccountIds(user);
-  const linkedInConn = await getLinkedInConnection(user.id);
+  const linkedInOwnerId = await resolveLinkedInOwnerId(user.id);
+  const linkedInConn = linkedInOwnerId
+    ? await getLinkedInConnection(linkedInOwnerId)
+    : null;
 
   const [posts, comments, users, linkedInStats] = await Promise.all([    accountIds.length
       ? prisma.post.count({ where: { metaAccountId: { in: accountIds } } })
@@ -20,7 +23,7 @@ export default async function DashboardPage() {
     user.role === "ADMIN"
       ? prisma.user.count({ where: { isActive: true } })
       : undefined,
-    linkedInConn ? getLinkedInDashboardStats(user.id) : null,
+    linkedInConn && linkedInOwnerId ? getLinkedInDashboardStats(linkedInOwnerId) : null,
   ]);
   const totalComments = comments + (linkedInStats?.comments || 0);
   const totalPosts = posts + (linkedInStats?.postCount || 0);

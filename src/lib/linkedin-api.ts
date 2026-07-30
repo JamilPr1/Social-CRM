@@ -97,6 +97,24 @@ export async function getLinkedInConnection(userId: string) {
   return prisma.linkedInConnection.findUnique({ where: { userId } });
 }
 
+/** Admin-connected LinkedIn is shared with the team for publishing. */
+export async function resolveLinkedInOwnerId(actingUserId: string): Promise<string | null> {
+  const own = await getLinkedInConnection(actingUserId);
+  if (own) return actingUserId;
+
+  const admin = await prisma.user.findFirst({
+    where: {
+      role: "ADMIN",
+      isActive: true,
+      linkedInConnection: { isNot: null },
+    },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return admin?.id ?? null;
+}
+
 async function refreshLinkedInToken(userId: string, refreshToken: string) {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
@@ -295,14 +313,26 @@ async function uploadLinkedInImageFromUrl(
   return imageUrn;
 }
 
-export async function getLinkedInAuthStatus(userId: string) {
-  const conn = await getLinkedInConnection(userId);
+export async function getLinkedInAuthStatus(actingUserId: string) {
+  const ownerId = await resolveLinkedInOwnerId(actingUserId);
+  if (!ownerId) {
+    return {
+      authenticated: false,
+      shared: false,
+      profile: null,
+      expiresAt: null,
+      personName: null,
+    };
+  }
+
+  const conn = await getLinkedInConnection(ownerId);
   const authenticated = Boolean(conn?.accessToken);
+  const shared = ownerId !== actingUserId;
 
   let profile: { name?: string; email?: string } | null = null;
   if (authenticated) {
     try {
-      const token = await getValidLinkedInAccessToken(userId);
+      const token = await getValidLinkedInAccessToken(ownerId);
       if (token) {
         const p = await fetchLinkedInProfile(token);
         profile = p ? { name: p.name, email: p.email } : { name: conn?.personName || undefined };
@@ -314,6 +344,7 @@ export async function getLinkedInAuthStatus(userId: string) {
 
   return {
     authenticated,
+    shared,
     profile,
     expiresAt: conn?.expiresAt?.toISOString() || null,
     personName: conn?.personName || null,

@@ -5,6 +5,7 @@ import { decryptToken } from "./encryption";
 import { parsePermissions, hasPermission } from "./utils";
 import type { SafeAccount } from "@/types/account";
 import type { SessionUser } from "@/types/session";
+import { TEAM_DEFAULT_PERMISSIONS } from "./org-resources";
 
 export const safeAccountSelect = {
   id: true,
@@ -21,25 +22,14 @@ export const safeAccountSelect = {
   createdAt: true,
 } as const;
 
+/** All active Meta pages connected by admin — shared with the team. */
 export async function getAccessibleAccounts(user: SessionUser): Promise<SafeAccount[]> {
-  if (user.role === "ADMIN") {
-    return prisma.metaAccount.findMany({
-      where: { isActive: true },
-      select: safeAccountSelect,
-      orderBy: { pageName: "asc" },
-    });
-  }
-
-  const access = await prisma.accountAccess.findMany({
-    where: { userId: user.id },
-    select: {
-      metaAccount: { select: safeAccountSelect },
-    },
+  void user;
+  return prisma.metaAccount.findMany({
+    where: { isActive: true },
+    select: safeAccountSelect,
+    orderBy: { pageName: "asc" },
   });
-
-  return access
-    .filter((a) => a.metaAccount.isActive)
-    .map((a) => a.metaAccount);
 }
 
 export async function getAccessibleAccountIds(user: SessionUser): Promise<string[]> {
@@ -47,32 +37,42 @@ export async function getAccessibleAccountIds(user: SessionUser): Promise<string
   return accounts.map((a) => a.id);
 }
 
+function memberHasPermission(
+  explicitPermissions: string[] | null,
+  required: "VIEW" | "POST" | "REPLY" | "BOOST" | "MANAGE"
+): boolean {
+  if (required === "MANAGE" || required === "BOOST") {
+    if (!explicitPermissions) return false;
+    return hasPermission(explicitPermissions, required);
+  }
+  if (explicitPermissions) {
+    return hasPermission(explicitPermissions, required);
+  }
+  return (TEAM_DEFAULT_PERMISSIONS as readonly string[]).includes(required);
+}
+
 export async function getAccountWithAccess(
   user: SessionUser,
   accountId: string,
   requiredPermission: "VIEW" | "POST" | "REPLY" | "BOOST" | "MANAGE" = "VIEW"
 ) {
-  if (user.role === "ADMIN") {
-    return prisma.metaAccount.findFirst({
-      where: { id: accountId, isActive: true },
-    });
-  }
+  const account = await prisma.metaAccount.findFirst({
+    where: { id: accountId, isActive: true },
+  });
+  if (!account) return null;
+
+  if (user.role === "ADMIN") return account;
 
   const access = await prisma.accountAccess.findUnique({
     where: {
       userId_metaAccountId: { userId: user.id, metaAccountId: accountId },
     },
-    include: {
-      metaAccount: true,
-    },
   });
 
-  if (!access?.metaAccount.isActive) return null;
+  const permissions = access ? parsePermissions(access.permissions) : null;
+  if (!memberHasPermission(permissions, requiredPermission)) return null;
 
-  const permissions = parsePermissions(access.permissions);
-  if (!hasPermission(permissions, requiredPermission)) return null;
-
-  return access.metaAccount;
+  return account;
 }
 
 export function getDecryptedToken(account: { pageAccessToken: string }) {

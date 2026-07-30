@@ -12,6 +12,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  if (user.role !== "ADMIN") {
+    return NextResponse.redirect(
+      new URL("/accounts?error=unauthorized", request.url)
+    );
+  }
+
   if (!isLinkedInConfigured()) {
     const issue = getLinkedInSetupIssue() || "LinkedIn not configured";
     return NextResponse.redirect(

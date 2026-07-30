@@ -1,4 +1,4 @@
-import { withAuth, apiSuccess } from "@/lib/api-helpers";
+import { withAuth, apiSuccess, apiError } from "@/lib/api-helpers";
 import { getLinkedInAuthStatus, deleteLinkedInConnection } from "@/lib/linkedin-api";
 import { getLinkedInConfigStatus } from "@/lib/linkedin-config";
 
@@ -14,6 +14,9 @@ export async function GET() {
 
 export async function DELETE() {
   return withAuth(async (user) => {
+    if (user.role !== "ADMIN") {
+      return apiError("Only admins can disconnect LinkedIn", 403);
+    }
     await deleteLinkedInConnection(user.id);
     return apiSuccess({ disconnected: true });
   });

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
 import { prisma } from "@/lib/prisma";
+import { resolveLinkedInOwnerId } from "@/lib/linkedin-api";
 import { syncLinkedInPostComments, syncLinkedInPostAnalytics } from "@/lib/linkedin-posts";
 
 export async function GET(request: NextRequest) {
@@ -9,15 +10,18 @@ export async function GET(request: NextRequest) {
     const sync = request.nextUrl.searchParams.get("sync") === "true";
     if (!postId) return apiError("postId required");
 
+    const ownerId = await resolveLinkedInOwnerId(user.id);
+    if (!ownerId) return apiError("LinkedIn not connected", 404);
+
     const post = await prisma.linkedInPost.findFirst({
-      where: { id: postId, userId: user.id },
+      where: { id: postId, userId: ownerId },
     });
     if (!post) return apiError("Post not found", 404);
 
     if (sync) {
       await Promise.all([
-        syncLinkedInPostAnalytics(user.id, postId),
-        syncLinkedInPostComments(user.id, postId),
+        syncLinkedInPostAnalytics(ownerId, postId),
+        syncLinkedInPostComments(ownerId, postId),
       ]);
     }
 

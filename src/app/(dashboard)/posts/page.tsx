@@ -75,6 +75,7 @@ type ComposePlatform = "all" | "facebook" | "instagram" | "both" | "linkedin";
 
 interface LinkedInAuth {
   authenticated: boolean;
+  shared: boolean;
   personName: string | null;
 }
 
@@ -97,8 +98,10 @@ export default function PostsPage() {
   const [includeLinkedIn, setIncludeLinkedIn] = useState(true);
   const [linkedInAuth, setLinkedInAuth] = useState<LinkedInAuth>({
     authenticated: false,
+    shared: false,
     personName: null,
   });
+  const [isAdmin, setIsAdmin] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [postToAll, setPostToAll] = useState(true);
@@ -171,9 +174,13 @@ export default function PostsPage() {
       .then((d) =>
         setLinkedInAuth({
           authenticated: Boolean(d.auth?.authenticated),
+          shared: Boolean(d.auth?.shared),
           personName: d.auth?.personName || d.auth?.profile?.name || null,
         })
       );
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(d.user?.role === "ADMIN"));
     fetch("/api/posts/generate")
       .then((r) => r.json())
       .then((d) => setAiConfigured(Boolean(d.gemini?.configured || d.groq?.configured || d.kimi?.configured)));
@@ -564,7 +571,7 @@ export default function PostsPage() {
 
       {tab === "compose" && (
         <div className="grid lg:grid-cols-3 gap-6">
-          {healthIssues.length > 0 && (
+          {healthIssues.length > 0 && isAdmin && (
             <div className="lg:col-span-3 bg-red-500/10 border border-red-500/30 rounded-xl p-5 text-sm space-y-3">
               <p className="font-medium text-red-300">Posting blocked — fix these, then reconnect</p>
               <ul className="list-disc list-inside space-y-1 text-[var(--muted)]">
@@ -582,20 +589,32 @@ export default function PostsPage() {
               </div>
             </div>
           )}
+          {healthIssues.length > 0 && !isAdmin && (
+            <div className="lg:col-span-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5 text-sm">
+              <p className="font-medium text-yellow-300">Posting may be limited</p>
+              <p className="text-[var(--muted)] mt-2">
+                Some account permissions need attention. Ask your admin to reconnect accounts in Settings.
+              </p>
+            </div>
+          )}
           {accounts.length === 0 && platform !== "linkedin" && (
             <div className="lg:col-span-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <p className="font-medium text-yellow-300">No Meta pages connected</p>
                 <p className="text-sm text-[var(--muted)] mt-1">
-                  Connect Facebook Pages in Accounts, or choose LinkedIn only below.
+                  {isAdmin
+                    ? "Connect Facebook Pages in Accounts, or choose LinkedIn only below."
+                    : "Your admin has not connected Meta pages yet. You can still post to LinkedIn if it is connected."}
                 </p>
               </div>
-              <a
-                href="/accounts"
-                className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg text-sm bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shrink-0"
-              >
-                Connect Account
-              </a>
+              {isAdmin && (
+                <a
+                  href="/accounts"
+                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg text-sm bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] shrink-0"
+                >
+                  Connect Account
+                </a>
+              )}
             </div>
           )}
           {!linkedInAuth.authenticated && (platform === "linkedin" || platform === "all") && (
@@ -603,15 +622,19 @@ export default function PostsPage() {
               <div>
                 <p className="font-medium text-yellow-300">LinkedIn not connected</p>
                 <p className="text-sm text-[var(--muted)] mt-1">
-                  Connect LinkedIn in Accounts to publish there.
+                  {isAdmin
+                    ? "Connect LinkedIn in Accounts to publish there."
+                    : "Ask your admin to connect LinkedIn in Accounts."}
                 </p>
               </div>
-              <a
-                href="/accounts"
-                className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg text-sm bg-[#0a66c2] text-white shrink-0"
-              >
-                Connect LinkedIn
-              </a>
+              {isAdmin && (
+                <a
+                  href="/accounts"
+                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-lg text-sm bg-[#0a66c2] text-white shrink-0"
+                >
+                  Connect LinkedIn
+                </a>
+              )}
             </div>
           )}
           <div className="lg:col-span-2 space-y-4">

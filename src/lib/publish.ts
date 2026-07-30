@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 import { getAccessibleAccounts, getAccountWithAccess, getDecryptedToken, logActivity } from "./accounts";
 import { createPagePost, createInstagramPost } from "./meta-api";
 import { syncPostsForAccount } from "./sync";
-import { getLinkedInConnection } from "./linkedin-api";
+import { getLinkedInConnection, resolveLinkedInOwnerId } from "./linkedin-api";
 import { addLinkedInPost, publishLinkedInPost } from "./linkedin-posts";
 import type { SessionUser } from "@/types/session";
 
@@ -65,9 +65,12 @@ export async function publishLinkedInForUser(
   scheduledAt?: string | null,
   imageUrl?: string
 ): Promise<PublishResult> {
-  const conn = await getLinkedInConnection(userId);
+  const linkedInOwnerId = await resolveLinkedInOwnerId(userId);
+  const conn = linkedInOwnerId
+    ? await getLinkedInConnection(linkedInOwnerId)
+    : null;
   const pageName = conn?.personName || "LinkedIn";
-  if (!conn) {
+  if (!conn || !linkedInOwnerId) {
     return {
       accountId: "linkedin",
       pageName,
@@ -78,7 +81,7 @@ export async function publishLinkedInForUser(
   }
 
   try {
-    const post = await addLinkedInPost(userId, {
+    const post = await addLinkedInPost(linkedInOwnerId, {
       content: message,
       scheduledAt: scheduledAt || null,
       source: "crm_compose",
@@ -94,7 +97,7 @@ export async function publishLinkedInForUser(
       };
     }
 
-    const published = await publishLinkedInPost(userId, post.id, imageUrl);
+    const published = await publishLinkedInPost(linkedInOwnerId, post.id, imageUrl);
     return {
       accountId: "linkedin",
       pageName,
@@ -256,26 +259,30 @@ export async function publishToAllPlatforms(
   return results;
 }
 
-export async function getPostableAccountIds(user: SessionUser): Promise<string[]> {  if (user.role === "ADMIN") {
-    const accounts = await getAccessibleAccounts(user);
+export async function getPostableAccountIds(user: SessionUser): Promise<string[]> {
+  const accounts = await getAccessibleAccounts(user);
+  if (user.role === "ADMIN") {
     return accounts.map((a) => a.id);
   }
 
-  const access = await prisma.accountAccess.findMany({
+  const accessByAccount = await prisma.accountAccess.findMany({
     where: { userId: user.id },
     select: { metaAccountId: true, permissions: true },
   });
+  const explicit = new Map(accessByAccount.map((a) => [a.metaAccountId, a.permissions]));
 
-  return access
-    .filter((a) => {
+  return accounts
+    .filter((account) => {
+      const raw = explicit.get(account.id);
+      if (!raw) return true;
       try {
-        const perms = JSON.parse(a.permissions) as string[];
+        const perms = JSON.parse(raw) as string[];
         return perms.includes("POST") || perms.includes("MANAGE");
       } catch {
-        return false;
+        return true;
       }
     })
-    .map((a) => a.metaAccountId);
+    .map((a) => a.id);
 }
 
 export async function publishDueScheduledPosts() {

@@ -25,6 +25,7 @@ interface User {
 
 const memberNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/accounts", label: "Accounts", icon: Link2 },
   { href: "/posts", label: "Posts", icon: FileText },
   { href: "/comments", label: "Comments", icon: MessageSquare },
   { href: "/messages", label: "Messages", icon: Inbox },
