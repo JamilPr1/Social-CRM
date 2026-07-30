@@ -40,9 +40,11 @@ export async function GET(request: NextRequest) {
 
     if (platform === "linkedin" || platform === "all") {
       if (sync) {
-        const syncResult = await syncLinkedInPosts(user.id);
-        if (syncResult.apiError) {
+        const syncResult = await syncLinkedInPosts(user.id, true);
+        if (syncResult.apiError && syncResult.imported === 0 && (syncResult.dbCount ?? 0) === 0) {
           linkedInSyncNote = syncResult.apiError;
+        } else if (syncResult.apiError && syncResult.imported === 0) {
+          linkedInSyncNote = `${syncResult.apiError} Showing ${syncResult.dbCount} post(s) from CRM.`;
         }
       }
 

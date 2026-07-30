@@ -123,11 +123,36 @@ async function refreshLinkedInToken(userId: string, refreshToken: string) {
   return data.access_token as string;
 }
 
+export async function ensureLinkedInPersonUrn(userId: string): Promise<string | null> {
+  const conn = await getLinkedInConnection(userId);
+  if (!conn) return null;
+  if (conn.personUrn) return conn.personUrn;
+
+  try {
+    const token = await getValidLinkedInAccessToken(userId);
+    if (!token) return null;
+    const profile = await fetchLinkedInProfile(token);
+    if (!profile?.sub) return null;
+    await saveLinkedInConnection(userId, { access_token: token }, profile);
+    return `urn:li:person:${profile.sub}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function getValidLinkedInAccessToken(userId: string) {
   const conn = await getLinkedInConnection(userId);
   if (!conn) return null;
 
-  const accessToken = decryptToken(conn.accessToken);
+  let accessToken: string;
+  try {
+    accessToken = decryptToken(conn.accessToken);
+  } catch {
+    throw new Error(
+      "LinkedIn token could not be decrypted. Disconnect and reconnect LinkedIn on this environment."
+    );
+  }
+
   if (conn.expiresAt && Date.now() < conn.expiresAt.getTime() - 60000) {
     return accessToken;
   }
@@ -253,20 +278,30 @@ export interface LinkedInApiPost {
 }
 
 export async function fetchLinkedInMemberPosts(userId: string, count = 50) {
-  const conn = await getLinkedInConnection(userId);
-  if (!conn?.personUrn) return { posts: [] as LinkedInApiPost[], error: "No person URN" };
+  const personUrn = await ensureLinkedInPersonUrn(userId);
+  if (!personUrn) {
+    return {
+      posts: [] as LinkedInApiPost[],
+      error: "LinkedIn profile URN missing — disconnect and reconnect LinkedIn.",
+    };
+  }
 
   try {
-    const author = encodeURIComponent(conn.personUrn);
+    const author = encodeURIComponent(personUrn);
     const result = (await linkedInRequest(
       userId,
       `/posts?q=author&author=${author}&count=${count}&sortBy=LAST_MODIFIED`
     )) as { elements?: LinkedInApiPost[] };
-    return { posts: result?.elements || [], error: null };
+    const posts = result?.elements || [];
+    return { posts, error: null };
   } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to fetch LinkedIn posts";
+    const hint = message.includes("403") || message.includes("ACCESS_DENIED")
+      ? " LinkedIn post import needs Community Management API on your developer app."
+      : "";
     return {
       posts: [] as LinkedInApiPost[],
-      error: err instanceof Error ? err.message : "Failed to fetch LinkedIn posts",
+      error: message + hint,
     };
   }
 }

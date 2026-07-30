@@ -215,11 +215,20 @@ export async function syncLinkedInPostComments(userId: string, postId: string) {
   return { count: comments.length, error };
 }
 
-export async function syncLinkedInPosts(userId: string) {
-  const lastSync = linkedInSyncCache.get(userId);
-  if (lastSync && Date.now() - lastSync < LINKEDIN_SYNC_TTL_MS) {
-    const conn = await getLinkedInConnection(userId);
-    return { imported: 0, apiError: null, personName: conn?.personName || "LinkedIn", skipped: true };
+export async function syncLinkedInPosts(userId: string, force = false) {
+  if (!force) {
+    const lastSync = linkedInSyncCache.get(userId);
+    if (lastSync && Date.now() - lastSync < LINKEDIN_SYNC_TTL_MS) {
+      const conn = await getLinkedInConnection(userId);
+      const dbCount = await prisma.linkedInPost.count({ where: { userId } });
+      return {
+        imported: 0,
+        apiError: null,
+        personName: conn?.personName || "LinkedIn",
+        skipped: true,
+        dbCount,
+      };
+    }
   }
 
   const conn = await getLinkedInConnection(userId);
@@ -322,7 +331,8 @@ export async function syncLinkedInPosts(userId: string) {
   }
 
   linkedInSyncCache.set(userId, Date.now(), LINKEDIN_SYNC_TTL_MS);
-  return { imported, apiError: error, personName };
+  const dbCount = await prisma.linkedInPost.count({ where: { userId } });
+  return { imported, apiError: error, personName, dbCount };
 }
 
 export async function getLinkedInIntegrationStatus(userId: string) {

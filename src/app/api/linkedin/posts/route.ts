@@ -17,7 +17,10 @@ export async function GET(request: NextRequest) {
     const sync = request.nextUrl.searchParams.get("sync") === "true";
 
     if (sync) {
-      await syncLinkedInPosts(user.id);
+      const syncResult = await syncLinkedInPosts(user.id, true);
+      const posts = await listLinkedInPosts(user.id, status || undefined);
+      const stats = await getLinkedInPostStats(user.id);
+      return apiSuccess({ posts, stats, synced: sync, syncResult });
     }
 
     const posts = await listLinkedInPosts(user.id, status || undefined);

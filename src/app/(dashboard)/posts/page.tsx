@@ -126,9 +126,7 @@ export default function PostsPage() {
     setPosts(loaded);
 
     if (data.linkedInSyncNote) {
-      setSyncStatus(
-        `LinkedIn API: ${data.linkedInSyncNote} — showing posts from CRM queue.`
-      );
+      setSyncStatus(data.linkedInSyncNote);
     } else if (data.counts) {
       setSyncStatus(
         `Synced — FB: ${data.counts.facebook}, IG: ${data.counts.instagram}, LinkedIn: ${data.counts.linkedin}`
@@ -348,13 +346,23 @@ export default function PostsPage() {
   function handleSync() {
     startSync(async () => {
       setSyncStatus("");
+      let linkedInNote = "";
       if (selectedPlatform === "linkedin" || selectedPlatform === "all") {
-        await fetch("/api/linkedin/posts?sync=true");
+        const liRes = await fetch("/api/linkedin/posts?sync=true");
+        const liData = await liRes.json();
+        if (liData.syncResult?.apiError) {
+          linkedInNote = liData.syncResult.apiError;
+        }
       }
       if (selectedPlatform !== "linkedin") {
         await fetch(`/api/sync/all?accountId=${selectedAccount}`, { method: "POST" });
       }
       await loadPosts(selectedAccount, selectedPlatform, true);
+      if (linkedInNote) {
+        setSyncStatus(
+          `LinkedIn: ${linkedInNote} Publish from Compose to add posts here.`
+        );
+      }
     });
   }
 
