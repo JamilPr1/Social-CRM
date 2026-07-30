@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
+import { logActivity } from "@/lib/accounts";
 import { decryptPasswordDisplay } from "@/lib/invites";
+import { createUserManually } from "@/lib/users-admin";
 
 export async function GET() {
   return withAuth(async (user) => {
@@ -35,12 +38,43 @@ export async function GET() {
   });
 }
 
+const createUserSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2),
+  password: z.string().min(6),
+  role: z.enum(["ADMIN", "MANAGER", "MEMBER"]).default("MEMBER"),
+});
+
 export async function POST(request: NextRequest) {
   return withAuth(async (user) => {
     if (user.role !== "ADMIN") return apiError("Forbidden", 403);
-    return apiError(
-      "Direct user creation is disabled. Invite users from Settings instead.",
-      400
-    );
+
+    try {
+      const body = await request.json();
+      const data = createUserSchema.parse(body);
+
+      const newUser = await createUserManually({
+        email: data.email,
+        name: data.name,
+        password: data.password,
+        role: data.role,
+      });
+
+      await logActivity(user.id, "CREATE_USER", `Created user ${newUser.email}`);
+
+      return apiSuccess(
+        {
+          user: {
+            ...newUser,
+            onboardedAt: newUser.onboardedAt?.toISOString() ?? null,
+            passwordDisplay: data.password,
+          },
+        },
+        201
+      );
+    } catch (err) {
+      if (err instanceof z.ZodError) return apiError("Invalid input");
+      return apiError(err instanceof Error ? err.message : "Failed to create user", 400);
+    }
   });
 }

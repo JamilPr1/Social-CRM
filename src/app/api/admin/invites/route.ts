@@ -5,6 +5,8 @@ import { logActivity } from "@/lib/accounts";
 import { createUserInvite, listInvitesForAdmin, decryptPasswordDisplay } from "@/lib/invites";
 import { getRequestOrigin } from "@/lib/app-url";
 import { prisma } from "@/lib/prisma";
+import { isEmailConfigured, sendInviteEmail } from "@/lib/email";
+import { getAdminEmail } from "@/lib/admin-config";
 
 export async function GET() {
   return withAuth(async (user) => {
@@ -28,6 +30,8 @@ export async function GET() {
     ]);
 
     return apiSuccess({
+      emailConfigured: isEmailConfigured(),
+      senderEmail: getAdminEmail(),
       invites: invites.map((invite) => ({
         id: invite.id,
         email: invite.email,
@@ -72,6 +76,28 @@ export async function POST(request: NextRequest) {
         origin
       );
 
+      let emailSent = false;
+      let emailError: string | null = null;
+
+      if (isEmailConfigured()) {
+        try {
+          await sendInviteEmail({
+            to: invite.email,
+            inviteeName: invite.name,
+            joinUrl,
+            invitedByName: user.name,
+            expiresAt: invite.expiresAt,
+          });
+          emailSent = true;
+        } catch (err) {
+          emailError =
+            err instanceof Error ? err.message : "Failed to send invite email";
+        }
+      } else {
+        emailError =
+          "Email not configured (set SMTP_PASS in Vercel). Share the join link below.";
+      }
+
       await logActivity(user.id, "INVITE_USER", `Invited ${invite.email}`);
 
       return apiSuccess(
@@ -83,6 +109,9 @@ export async function POST(request: NextRequest) {
             role: invite.role,
             expiresAt: invite.expiresAt.toISOString(),
             joinUrl,
+            emailSent,
+            emailError,
+            senderEmail: getAdminEmail(),
           },
         },
         201

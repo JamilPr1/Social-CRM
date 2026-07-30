@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Copy, Mail, Settings, Shield, Trash2, Users } from "lucide-react";
+import { Copy, Mail, Settings, Shield, Trash2, UserPlus, Users } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 interface TeamUser {
@@ -35,7 +35,16 @@ export default function AdminSettingsPage() {
   const [lastJoinUrl, setLastJoinUrl] = useState("");
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState({ email: "", name: "", role: "MEMBER" });
+  const [manualForm, setManualForm] = useState({
+    email: "",
+    name: "",
+    password: "",
+    role: "MEMBER",
+  });
   const [submitting, setSubmitting] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [senderEmail, setSenderEmail] = useState("aarfa.developers@gmail.com");
 
   useEffect(() => {
     loadData();
@@ -51,6 +60,8 @@ export default function AdminSettingsPage() {
       }
       setUsers(data.users || []);
       setInvites(data.invites || []);
+      setEmailConfigured(Boolean(data.emailConfigured));
+      if (data.senderEmail) setSenderEmail(data.senderEmail);
     } finally {
       setLoading(false);
     }
@@ -73,7 +84,13 @@ export default function AdminSettingsPage() {
         setError(data.error || "Failed to send invite");
         return;
       }
-      setSuccess(`Invite sent to ${data.invite.email}`);
+      if (data.invite.emailSent) {
+        setSuccess(`Invite email sent to ${data.invite.email} from ${data.invite.senderEmail}`);
+      } else if (data.invite.emailError) {
+        setSuccess(`Invite created for ${data.invite.email}. ${data.invite.emailError}`);
+      } else {
+        setSuccess(`Invite created for ${data.invite.email}`);
+      }
       setLastJoinUrl(data.invite.joinUrl);
       setForm({ email: "", name: "", role: "MEMBER" });
       loadData();
@@ -81,6 +98,34 @@ export default function AdminSettingsPage() {
       setError("Something went wrong");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleManualCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setManualSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(manualForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to create user");
+        return;
+      }
+      setSuccess(
+        `User ${data.user.email} created — they can sign in immediately with the password you set.`
+      );
+      setManualForm({ email: "", name: "", password: "", role: "MEMBER" });
+      loadData();
+    } catch {
+      setError("Something went wrong");
+    } finally {
+      setManualSubmitting(false);
     }
   }
 
@@ -109,9 +154,17 @@ export default function AdminSettingsPage() {
           <h1 className="text-2xl font-bold">Team Settings</h1>
         </div>
         <p className="text-[var(--muted)] text-sm">
-          Invite team members by email. Only invited users can join and set their password.
+          Invite by email or add users manually with a password. Invites are sent from{" "}
+          <span className="text-white">{senderEmail}</span>.
         </p>
       </div>
+
+      {!emailConfigured && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 px-4 py-3 rounded-lg text-sm">
+          Email delivery is not configured. Add <code className="text-xs">SMTP_PASS</code> (Gmail
+          App Password) in Vercel env vars. Invites still create a join link you can copy.
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
@@ -195,6 +248,73 @@ export default function AdminSettingsPage() {
             <p className="text-xs text-[var(--muted)]">Link expires in 7 days.</p>
           </div>
         )}
+      </div>
+
+      <div className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <UserPlus className="w-4 h-4 text-[var(--primary)]" />
+          <h2 className="font-semibold">Add user manually</h2>
+        </div>
+        <p className="text-sm text-[var(--muted)]">
+          Create an account with email and password — the user can sign in immediately at /login.
+        </p>
+
+        <form onSubmit={handleManualCreate} className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Email</label>
+            <input
+              type="email"
+              value={manualForm.email}
+              onChange={(e) => setManualForm((f) => ({ ...f, email: e.target.value }))}
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Full name</label>
+            <input
+              type="text"
+              value={manualForm.name}
+              onChange={(e) => setManualForm((f) => ({ ...f, name: e.target.value }))}
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
+              required
+              minLength={2}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Password</label>
+            <input
+              type="text"
+              value={manualForm.password}
+              onChange={(e) => setManualForm((f) => ({ ...f, password: e.target.value }))}
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
+              required
+              minLength={6}
+              placeholder="Min 6 characters"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Role</label>
+            <select
+              value={manualForm.role}
+              onChange={(e) => setManualForm((f) => ({ ...f, role: e.target.value }))}
+              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
+            >
+              <option value="MEMBER">Member — can post & reply</option>
+              <option value="MANAGER">Manager</option>
+              <option value="ADMIN">Admin — full access</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <button
+              type="submit"
+              disabled={manualSubmitting}
+              className="px-5 py-2.5 rounded-lg bg-[var(--primary)] text-white text-sm disabled:opacity-50"
+            >
+              {manualSubmitting ? "Creating..." : "Create user"}
+            </button>
+          </div>
+        </form>
       </div>
 
       {pendingInvites.length > 0 && (
@@ -303,7 +423,8 @@ export default function AdminSettingsPage() {
           </table>
         </div>
         <p className="text-xs text-[var(--muted)]">
-          Passwords are shown for members who joined via invite. Assign Meta page access under{" "}
+          Passwords are shown for users created manually or who joined via invite. Assign Meta page
+          access under{" "}
           <Link href="/admin/users" className="text-[var(--primary)] hover:underline">
             Team access
           </Link>
