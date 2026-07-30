@@ -103,6 +103,8 @@ export default function PostsPage() {
   const [savedKeywords, setSavedKeywords] = useState<SeoKeyword[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [aiConfigured, setAiConfigured] = useState(false);
   const [posting, setPosting] = useState(false);
   const [scheduled, setScheduled] = useState<ScheduledPost[]>([]);
 
@@ -167,6 +169,9 @@ export default function PostsPage() {
           personName: d.auth?.personName || d.auth?.profile?.name || null,
         })
       );
+    fetch("/api/posts/generate")
+      .then((r) => r.json())
+      .then((d) => setAiConfigured(Boolean(d.kimi?.configured)));
   }, [tab]);
 
   const targetAccounts = useMemo(() => {
@@ -256,6 +261,7 @@ export default function PostsPage() {
           topic: topic || message,
           keywords: selectedKeywords,
           useSavedKeywords: selectedKeywords.length === 0,
+          platform,
         }),
       });
       const data = await res.json();
@@ -264,11 +270,47 @@ export default function PostsPage() {
         return;
       }
       setMessage(data.message);
-      if (!topic) setTopic(message);
+      if (!topic && message) setTopic(message);
+      if (data.provider === "template") {
+        setSuccess("Generated with templates — add KIMI_API_KEY for AI writing.");
+      } else {
+        setSuccess("Post generated with Kimi AI.");
+      }
     } catch {
       setError("Failed to generate post");
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleGenerateImage() {
+    const imageTopic = topic || message;
+    if (!imageTopic.trim()) {
+      setError("Enter a topic or message first");
+      return;
+    }
+    setError("");
+    setGeneratingImage(true);
+    try {
+      const res = await fetch("/api/posts/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: imageTopic,
+          keywords: selectedKeywords,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to generate image");
+        return;
+      }
+      setImageUrl(data.imageUrl);
+      setSuccess("Image URL generated (Pollinations — free). Preview before publishing.");
+    } catch {
+      setError("Failed to generate image");
+    } finally {
+      setGeneratingImage(false);
     }
   }
 
@@ -499,7 +541,11 @@ export default function PostsPage() {
                     className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline disabled:opacity-50"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    {generating ? "Generating..." : "Auto-generate with SEO"}
+                    {generating
+                      ? "Generating..."
+                      : aiConfigured
+                        ? "Write with Kimi AI"
+                        : "Auto-generate with SEO"}
                   </button>
                 </div>
                 <textarea
@@ -551,14 +597,30 @@ export default function PostsPage() {
 
               {(platform === "instagram" || platform === "both" || platform === "all") && (
                 <div>
-                  <label className="block text-sm font-medium mb-2">Image URL (required for Instagram)</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">
+                      Image URL (required for Instagram)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleGenerateImage}
+                      disabled={generatingImage || (!topic && !message)}
+                      className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline disabled:opacity-50"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {generatingImage ? "Generating..." : "Generate image (free)"}
+                    </button>
+                  </div>
                   <input
                     type="url"
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
                     className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
-                    placeholder="https://..."
+                    placeholder="https://... or use Generate image"
                   />
+                  <p className="text-xs text-[var(--muted)] mt-1.5">
+                    Images use Pollinations (free). Kimi writes the prompt; Kimi does not generate images directly.
+                  </p>
                 </div>
               )}
 

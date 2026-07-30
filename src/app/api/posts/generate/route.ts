@@ -1,5 +1,6 @@
 import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
-import { buildSeoPost } from "@/lib/seo-post";
+import { generatePostCopy } from "@/lib/ai-post";
+import { getAiConfigStatus } from "@/lib/ai-config";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -9,7 +10,14 @@ const generateSchema = z.object({
   callToAction: z.string().optional(),
   brandName: z.string().optional(),
   useSavedKeywords: z.boolean().optional(),
+  platform: z.string().optional(),
 });
+
+export async function GET() {
+  return withAuth(async () => {
+    return apiSuccess(getAiConfigStatus());
+  });
+}
 
 export async function POST(request: Request) {
   return withAuth(async () => {
@@ -26,11 +34,12 @@ export async function POST(request: Request) {
         keywords = [...keywords, ...saved.map((k) => k.keyword)];
       }
 
-      const result = buildSeoPost({
+      const result = await generatePostCopy({
         topic: data.topic,
         keywords,
         callToAction: data.callToAction,
-        brandName: data.brandName,
+        brandName: data.brandName || process.env.LEGAL_COMPANY_NAME,
+        platform: data.platform,
       });
 
       return apiSuccess(result);

@@ -1,9 +1,9 @@
 import "server-only";
 
 import { getLinkedInRedirectUri } from "./app-url";
+import { isKimiConfigured, getAiConfigStatus } from "./ai-config";
 import { existsSync } from "fs";
 import { join } from "path";
-
 const PLACEHOLDER_PATTERNS = [/^your_/i, /^sk-your/i, /^change_me/i, /^example/i, /^placeholder/i];
 
 function isPlaceholder(value: string | undefined) {
@@ -61,11 +61,10 @@ export function getLinkedInSetupIssue() {
 }
 
 export function isOpenAIConfigured() {
-  return Boolean(linkedInEnv.openaiApiKey && !isPlaceholder(linkedInEnv.openaiApiKey));
+  return isKimiConfigured();
 }
 
-export function isNotionConfigured() {
-  return Boolean(
+export function isNotionConfigured() {  return Boolean(
     linkedInEnv.notionApiKey &&
       linkedInEnv.notionDatabaseId &&
       !isPlaceholder(linkedInEnv.notionApiKey) &&
@@ -98,8 +97,8 @@ export function getLinkedInConfigStatus() {
       issue: getLinkedInSetupIssue(),
       redirectUri: linkedInEnv.redirectUri,
     },
-    openai: { configured: isOpenAIConfigured() },
-    notion: { configured: isNotionConfigured() },
+    openai: { configured: isKimiConfigured() },
+    ai: getAiConfigStatus(),    notion: { configured: isNotionConfigured() },
     sheets: {
       configured: isGoogleSheetsConfigured(),
       issue: getGoogleSheetsSetupIssue(),
