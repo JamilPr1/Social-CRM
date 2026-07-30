@@ -1,8 +1,9 @@
 import "server-only";
 
-export function getLegalConfig() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+import { getAppBaseUrl } from "./app-url";
 
+export function getLegalConfig() {
+  const appUrl = getAppBaseUrl();
   return {
     appName: process.env.LEGAL_APP_NAME || "Arfa CRM",
     companyName: process.env.LEGAL_COMPANY_NAME || "Arfa Developers",

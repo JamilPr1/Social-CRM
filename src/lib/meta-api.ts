@@ -1,3 +1,5 @@
+import { getMetaRedirectUri } from "./app-url";
+
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
 export interface MetaPage {
@@ -37,7 +39,7 @@ export function getMetaOAuthUrl(
 ): string {
   const params = new URLSearchParams({
     client_id: process.env.META_APP_ID!,
-    redirect_uri: process.env.META_REDIRECT_URI!,
+    redirect_uri: getMetaRedirectUri(),
     state,
     response_type: "code",
   });
@@ -310,7 +312,7 @@ export async function exchangeCodeForToken(code: string) {
   const params = new URLSearchParams({
     client_id: process.env.META_APP_ID!,
     client_secret: process.env.META_APP_SECRET!,
-    redirect_uri: process.env.META_REDIRECT_URI!,
+    redirect_uri: getMetaRedirectUri(),
     code,
   });
   const res = await fetch(`${GRAPH_API}/oauth/access_token?${params}`);

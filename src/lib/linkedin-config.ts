@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getLinkedInRedirectUri } from "./app-url";
 import { existsSync } from "fs";
 import { join } from "path";
 
@@ -13,9 +14,7 @@ function isPlaceholder(value: string | undefined) {
 export const linkedInEnv = {
   clientId: process.env.LINKEDIN_CLIENT_ID || "",
   clientSecret: process.env.LINKEDIN_CLIENT_SECRET || "",
-  redirectUri:
-    process.env.LINKEDIN_REDIRECT_URI ||
-    `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/linkedin/callback`,
+  redirectUri: getLinkedInRedirectUri(),
   apiVersion: process.env.LINKEDIN_API_VERSION || "202601",
   extraScopes: process.env.LINKEDIN_EXTRA_SCOPES || "",
   openaiApiKey: process.env.OPENAI_API_KEY || "",
