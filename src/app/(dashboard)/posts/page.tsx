@@ -271,10 +271,12 @@ export default function PostsPage() {
       }
       setMessage(data.message);
       if (!topic && message) setTopic(message);
-      if (data.provider === "template") {
-        setSuccess("Generated with built-in templates — add GEMINI_API_KEY (free) for AI writing.");
+      if (data.warning) {
+        setSuccess(data.warning);
+      } else if (data.provider === "template") {
+        setSuccess("Draft ready — review and edit before publishing.");
       } else {
-        setSuccess(`Post generated with ${data.provider} AI.`);
+        setSuccess("Post generated — review and publish when ready.");
       }
     } catch {
       setError("Failed to generate post");
@@ -306,7 +308,7 @@ export default function PostsPage() {
         return;
       }
       setImageUrl(data.imageUrl);
-      setSuccess("Image URL generated (Pollinations — free). Preview before publishing.");
+      setSuccess("Image URL added — preview it before publishing.");
     } catch {
       setError("Failed to generate image");
     } finally {
@@ -619,7 +621,7 @@ export default function PostsPage() {
                     placeholder="https://... or use Generate image"
                   />
                   <p className="text-xs text-[var(--muted)] mt-1.5">
-                    Images use Pollinations (free). Kimi writes the prompt; Kimi does not generate images directly.
+                    AI generates a matching image URL for Instagram posts.
                   </p>
                 </div>
               )}

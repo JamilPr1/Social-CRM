@@ -18,7 +18,7 @@ export type AiProvider = "gemini" | "groq" | "kimi" | "template" | "auto";
 export const aiEnv = {
   provider: (process.env.AI_PROVIDER || "auto").toLowerCase() as AiProvider,
   geminiApiKey: cleanKey(process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY),
-  geminiModel: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+  geminiModel: process.env.GEMINI_MODEL || "gemini-2.0-flash-lite",
   groqApiKey: cleanKey(process.env.GROQ_API_KEY),
   groqModel: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
   kimiApiKey: cleanKey(process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY),
