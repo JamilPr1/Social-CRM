@@ -4,7 +4,7 @@ import { randomBytes } from "crypto";
 import { getSessionUser } from "@/lib/auth";
 import { getLinkedInAuthUrl } from "@/lib/linkedin-api";
 import { isLinkedInConfigured, getLinkedInSetupIssue } from "@/lib/linkedin-config";
-import { getRequestOrigin, getLinkedInRedirectUri } from "@/lib/app-url";
+import { getRequestOrigin, getLinkedInOAuthRedirectUri } from "@/lib/app-url";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   }
 
   const origin = getRequestOrigin(request);
-  const redirectUri = getLinkedInRedirectUri(origin);
+  const redirectUri = getLinkedInOAuthRedirectUri(origin);
   const state = randomBytes(16).toString("hex");
   const cookieStore = await cookies();
   cookieStore.set("linkedin_oauth_state", state, {

@@ -172,6 +172,12 @@ export function AccountsClient({
                   </div>
                 </div>
               ))}
+              {isAdmin && (
+                <p className="text-xs text-[var(--muted)] pt-2">
+                  Only see one page? Click <strong>Refresh pages</strong> after reconnecting Meta to
+                  pull all Facebook Pages you manage.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -233,13 +239,22 @@ export function AccountsClient({
                   : "LinkedIn is not connected yet. Ask your admin to connect it."}
               </p>
               {isAdmin && (
-                <a
-                  href="/api/linkedin/connect"
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm bg-[#0a66c2] text-white"
-                >
-                  <Linkedin className="w-4 h-4" />
-                  Connect LinkedIn
-                </a>
+                <>
+                  <a
+                    href="/api/linkedin/connect"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm bg-[#0a66c2] text-white"
+                  >
+                    <Linkedin className="w-4 h-4" />
+                    Connect LinkedIn
+                  </a>
+                  <p className="text-xs text-[var(--muted)] mt-4 max-w-sm mx-auto">
+                    If LinkedIn shows an error, add this redirect URL in your LinkedIn Developer app
+                    under Auth → Redirect URLs:{" "}
+                    <span className="text-[var(--primary)] break-all">
+                      https://social-crm-five.vercel.app/api/social/linkedin/callback
+                    </span>
+                  </p>
+                </>
               )}
             </div>
           )}

@@ -55,3 +55,12 @@ export function getLinkedInRedirectUri(requestOrigin?: string) {
     requestOrigin
   );
 }
+
+/** Redirect URI sent to LinkedIn — uses Vercel env when set (supports legacy /api/social/... path). */
+export function getLinkedInOAuthRedirectUri(requestOrigin?: string) {
+  const explicit = process.env.LINKEDIN_REDIRECT_URI?.trim();
+  if (explicit && !explicit.includes("localhost")) {
+    return explicit.replace(/\/$/, "");
+  }
+  return `${getAppBaseUrl(requestOrigin)}/api/linkedin/callback`;
+}
