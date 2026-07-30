@@ -1,16 +1,7 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
-import { logActivity } from "@/lib/accounts";
-
-const createUserSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(2),
-  password: z.string().min(6),
-  role: z.enum(["ADMIN", "MANAGER", "MEMBER"]).default("MEMBER"),
-});
+import { decryptPasswordDisplay } from "@/lib/invites";
 
 export async function GET() {
   return withAuth(async (user) => {
@@ -23,7 +14,9 @@ export async function GET() {
         name: true,
         role: true,
         isActive: true,
+        onboardedAt: true,
         createdAt: true,
+        passwordDisplay: true,
         accountAccess: {
           include: { metaAccount: { select: { id: true, pageName: true } } },
         },
@@ -31,36 +24,23 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    return apiSuccess({ users });
+    const usersWithPasswords = users.map((u) => ({
+      ...u,
+      passwordDisplay: decryptPasswordDisplay(u.passwordDisplay),
+      onboardedAt: u.onboardedAt?.toISOString() ?? null,
+      createdAt: u.createdAt.toISOString(),
+    }));
+
+    return apiSuccess({ users: usersWithPasswords });
   });
 }
 
 export async function POST(request: NextRequest) {
   return withAuth(async (user) => {
     if (user.role !== "ADMIN") return apiError("Forbidden", 403);
-
-    try {
-      const body = await request.json();
-      const data = createUserSchema.parse(body);
-
-      const existing = await prisma.user.findUnique({ where: { email: data.email } });
-      if (existing) return apiError("Email already in use");
-
-      const newUser = await prisma.user.create({
-        data: {
-          email: data.email,
-          name: data.name,
-          passwordHash: await hash(data.password, 12),
-          role: data.role,
-        },
-        select: { id: true, email: true, name: true, role: true, isActive: true },
-      });
-
-      await logActivity(user.id, "CREATE_USER", `Created user ${newUser.email}`);
-      return apiSuccess({ user: newUser }, 201);
-    } catch (err) {
-      if (err instanceof z.ZodError) return apiError("Invalid input");
-      return apiError("Failed to create user", 500);
-    }
+    return apiError(
+      "Direct user creation is disabled. Invite users from Settings instead.",
+      400
+    );
   });
 }

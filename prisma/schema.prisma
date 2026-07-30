@@ -26,8 +26,10 @@ model User {
   email        String   @unique
   name         String
   passwordHash String
+  passwordDisplay String? // encrypted copy for admin visibility after onboarding
   role         Role     @default(MEMBER)
   isActive     Boolean  @default(true)
+  onboardedAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -40,6 +42,28 @@ model User {
   linkedInLeads      LinkedInLead[]
   jobApplications    JobApplication[]
   mediaUploads       MediaUpload[]
+  invitesSent        UserInvite[] @relation("InvitedBy")
+  inviteAccepted     UserInvite?  @relation("AcceptedInvite")
+}
+
+model UserInvite {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String?
+  token       String    @unique
+  role        Role      @default(MEMBER)
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  acceptedUserId String? @unique
+  createdAt   DateTime  @default(now())
+
+  invitedBy    User  @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  acceptedUser User? @relation("AcceptedInvite", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+
+  @@index([token])
+  @@index([invitedById])
+  @@index([expiresAt])
 }
 
 model Session {

@@ -12,6 +12,7 @@ import {
   LogOut,
   Rocket,
   LayoutList,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +23,14 @@ interface User {
   role: string;
 }
 
-const navItems = [
+const memberNavItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/posts", label: "Posts", icon: FileText },
+  { href: "/comments", label: "Comments", icon: MessageSquare },
+  { href: "/messages", label: "Messages", icon: Inbox },
+];
+
+const adminNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/activity", label: "Activity", icon: LayoutList },
   { href: "/accounts", label: "Accounts", icon: Link2 },
@@ -32,11 +40,16 @@ const navItems = [
   { href: "/messages", label: "Messages", icon: Inbox },
 ];
 
-const adminItems = [{ href: "/admin/users", label: "Team", icon: Users }];
+const adminItems = [
+  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/users", label: "Team access", icon: Users },
+];
 
 export function Sidebar({ user }: { user: User }) {
   const pathname = usePathname();
   const router = useRouter();
+  const isAdmin = user.role === "ADMIN";
+  const navItems = isAdmin ? adminNavItems : memberNavItems;
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -81,7 +94,7 @@ export function Sidebar({ user }: { user: User }) {
           );
         })}
 
-        {user.role === "ADMIN" && (
+        {isAdmin && (
           <>
             <div className="pt-4 pb-2">
               <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider px-3">

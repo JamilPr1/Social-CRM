@@ -5,10 +5,13 @@ import { jwtVerify } from "jose";
 const SESSION_COOKIE = "meta_crm_session";
 const publicPaths = [
   "/login",
+  "/join",
   "/privacy",
   "/terms",
   "/data-deletion",
   "/api/auth/login",
+  "/api/auth/invite",
+  "/api/auth/accept-invite",
   "/api/data-deletion",
 ];
 
@@ -59,6 +62,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (authenticated && pathname.startsWith("/login")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  if (authenticated && pathname.startsWith("/join")) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

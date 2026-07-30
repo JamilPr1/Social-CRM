@@ -1,11 +1,14 @@
 import { getSessionUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import ActivityPageClient from "./activity-client";
 
-export default async function ActivityPage() {
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== "ADMIN") redirect("/dashboard");
 
-  return <ActivityPageClient />;
+  return children;
 }

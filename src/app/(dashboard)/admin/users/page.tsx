@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Shield, X } from "lucide-react";
+import Link from "next/link";
+import { Shield, X } from "lucide-react";
 import { parsePermissions } from "@/lib/utils";
 
 interface User {
@@ -28,19 +29,11 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [accounts, setAccounts] = useState<MetaAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
   const [assigningTo, setAssigningTo] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    email: "",
-    name: "",
-    password: "",
-    role: "MEMBER",
-  });
   const [accessForm, setAccessForm] = useState({
     metaAccountId: "",
-    permissions: ["VIEW"] as string[],
+    permissions: ["VIEW", "POST"] as string[],
   });
-  const [error, setError] = useState("");
 
   useEffect(() => {
     loadData();
@@ -61,28 +54,6 @@ export default function AdminUsersPage() {
     }
   }
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Failed to create user");
-        return;
-      }
-      setShowCreate(false);
-      setForm({ email: "", name: "", password: "", role: "MEMBER" });
-      loadData();
-    } catch {
-      setError("Something went wrong");
-    }
-  }
-
   async function handleAssignAccess(userId: string) {
     try {
       const res = await fetch("/api/admin/access", {
@@ -96,7 +67,7 @@ export default function AdminUsersPage() {
       });
       if (res.ok) {
         setAssigningTo(null);
-        setAccessForm({ metaAccountId: "", permissions: ["VIEW"] });
+        setAccessForm({ metaAccountId: "", permissions: ["VIEW", "POST"] });
         loadData();
       }
     } catch (err) {
@@ -125,83 +96,18 @@ export default function AdminUsersPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Team Management</h1>
+          <h1 className="text-2xl font-bold">Team access</h1>
           <p className="text-[var(--muted)] mt-1">
-            Manage users and assign account access
+            Assign Meta page permissions to team members
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white px-4 py-2.5 rounded-lg text-sm font-medium"
+        <Link
+          href="/admin/settings"
+          className="text-sm text-[var(--primary)] hover:underline"
         >
-          <Plus className="w-4 h-4" />
-          Add User
-        </button>
+          Invite new members →
+        </Link>
       </div>
-
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <form
-            onSubmit={handleCreate}
-            className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-6 w-full max-w-lg space-y-4"
-          >
-            <h2 className="text-lg font-semibold">Create Team Member</h2>
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-            <input
-              type="text"
-              placeholder="Full name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
-              required
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
-              required
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
-              required
-            />
-            <select
-              value={form.role}
-              onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
-            >
-              <option value="MEMBER">Member</option>
-              <option value="MANAGER">Manager</option>
-              <option value="ADMIN">Admin</option>
-            </select>
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="px-4 py-2.5 rounded-lg text-sm border border-[var(--border)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2.5 rounded-lg text-sm bg-[var(--primary)] text-white"
-              >
-                Create User
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {loading ? (
         <div className="space-y-4">

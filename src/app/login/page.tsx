@@ -91,6 +91,13 @@ export default function LoginPage() {
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
+
+          <p className="text-center text-sm text-[var(--muted)]">
+            Invited to the team?{" "}
+            <a href="/join" className="text-[var(--primary)] hover:underline">
+              Set your password
+            </a>
+          </p>
         </form>
 
         <p className="text-center text-xs text-[var(--muted)] mt-6">
