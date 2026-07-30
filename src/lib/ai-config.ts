@@ -47,7 +47,7 @@ export function isAnyAiConfigured() {
   return isGeminiConfigured() || isGroqConfigured() || isKimiConfigured();
 }
 
-/** Providers to try in order when AI_PROVIDER=auto */
+/** Providers to try in order — Groq primary, then Gemini, then Kimi */
 export function getActiveProviderOrder(): Array<"gemini" | "groq" | "kimi"> {
   const fixed = aiEnv.provider;
   if (fixed === "gemini" && isGeminiConfigured()) return ["gemini"];
@@ -55,10 +55,16 @@ export function getActiveProviderOrder(): Array<"gemini" | "groq" | "kimi"> {
   if (fixed === "kimi" && isKimiConfigured()) return ["kimi"];
   if (fixed === "template") return [];
 
+  const customOrder = process.env.AI_PROVIDER_ORDER?.split(/[,\s]+/).map((p) => p.trim().toLowerCase());
+  const defaultOrder: Array<"gemini" | "groq" | "kimi"> = ["groq", "gemini", "kimi"];
+  const sequence = (customOrder?.length ? customOrder : defaultOrder) as Array<"gemini" | "groq" | "kimi">;
+
   const order: Array<"gemini" | "groq" | "kimi"> = [];
-  if (isGeminiConfigured()) order.push("gemini");
-  if (isGroqConfigured()) order.push("groq");
-  if (isKimiConfigured()) order.push("kimi");
+  for (const provider of sequence) {
+    if (provider === "groq" && isGroqConfigured() && !order.includes("groq")) order.push("groq");
+    if (provider === "gemini" && isGeminiConfigured() && !order.includes("gemini")) order.push("gemini");
+    if (provider === "kimi" && isKimiConfigured() && !order.includes("kimi")) order.push("kimi");
+  }
   return order;
 }
 
@@ -80,7 +86,8 @@ export function getAiConfigStatus() {
       note: "Images use Pollinations (free). Kimi/Gemini/Groq write the prompt only.",
     },
     recommendation:
-      "For free AI writing, use Google Gemini (aistudio.google.com) or Groq (console.groq.com).",
+      "Auto order: Groq → Gemini → Kimi. Override with AI_PROVIDER_ORDER=groq,gemini,kimi",
+    fallbackOrder: getActiveProviderOrder(),
   };
 }
 
