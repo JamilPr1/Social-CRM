@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
 import { prisma } from "@/lib/prisma";
-import { publishToAllPlatforms, getPostableAccountIds, publishDueScheduledPosts } from "@/lib/publish";
+import { publishToAllPlatforms, getPostableAccountIds, publishDueScheduledPosts, shouldPublishLinkedIn } from "@/lib/publish";
 import { publishDueLinkedInPosts, addLinkedInPost } from "@/lib/linkedin-posts";
 import { z } from "zod";
 
@@ -47,8 +47,7 @@ export async function POST(request: Request) {
       if (data.postToAll && data.platform !== "linkedin") {
         accountIds = await getPostableAccountIds(user);
       }
-      const includeLinkedIn =
-        data.includeLinkedIn ?? (data.platform === "all" || data.platform === "linkedin");
+      const includeLinkedIn = shouldPublishLinkedIn(data.platform, data.includeLinkedIn);
       const needsMetaPages = data.platform !== "linkedin";
 
       if (needsMetaPages && data.platform !== "all" && accountIds.length === 0) {

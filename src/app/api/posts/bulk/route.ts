@@ -1,5 +1,5 @@
 import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
-import { publishToAllPlatforms, getPostableAccountIds } from "@/lib/publish";
+import { publishToAllPlatforms, getPostableAccountIds, shouldPublishLinkedIn } from "@/lib/publish";
 import { z } from "zod";
 
 const bulkPostSchema = z.object({
@@ -40,8 +40,7 @@ export async function POST(request: Request) {
         message: data.message,
         platform: data.platform,
         imageUrl: data.imageUrl,
-        includeLinkedIn:
-          data.includeLinkedIn ?? (data.platform === "all" || data.platform === "linkedin"),
+        includeLinkedIn: shouldPublishLinkedIn(data.platform, data.includeLinkedIn),
       });
       const successCount = results.filter((r) => r.success).length;
       return apiSuccess({

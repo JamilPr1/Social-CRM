@@ -10,6 +10,33 @@ import type { SessionUser } from "@/types/session";
 
 export type PublishPlatform = "facebook" | "instagram" | "both" | "linkedin" | "all";
 
+export type MetaSubPlatform = "facebook" | "instagram";
+
+/** Which Meta surfaces to publish to for a given compose platform choice. */
+export function resolveMetaSubPlatforms(platform: PublishPlatform): MetaSubPlatform[] {
+  switch (platform) {
+    case "facebook":
+      return ["facebook"];
+    case "instagram":
+      return ["instagram"];
+    case "both":
+    case "all":
+      return ["facebook", "instagram"];
+    default:
+      return [];
+  }
+}
+
+/** LinkedIn is only included for linkedin-only or explicit all-platforms flows. */
+export function shouldPublishLinkedIn(
+  platform: PublishPlatform,
+  includeLinkedIn?: boolean
+): boolean {
+  if (platform === "linkedin") return true;
+  if (platform === "all") return includeLinkedIn !== false;
+  return false;
+}
+
 export type PublishResult = {
   accountId: string;
   pageName: string;
@@ -78,7 +105,7 @@ export async function publishToAccounts(
   options: {
     accountIds: string[];
     message: string;
-    platform: "facebook" | "instagram" | "both";
+    targets: readonly MetaSubPlatform[];
     imageUrl?: string;
   }
 ) {
@@ -86,23 +113,21 @@ export async function publishToAccounts(
   for (const accountId of options.accountIds) {
     const account = await getAccountWithAccess(user, accountId, "POST");
     if (!account) {
-      results.push({
-        accountId,
-        pageName: "Unknown",
-        platform: options.platform,
-        success: false,
-        error: "No post permission",
-      });
+      for (const platform of options.targets) {
+        results.push({
+          accountId,
+          pageName: "Unknown",
+          platform,
+          success: false,
+          error: "No post permission",
+        });
+      }
       continue;
     }
 
     const token = getDecryptedToken(account);
-    const platforms =
-      options.platform === "both"
-        ? (["facebook", ...(account.instagramId ? ["instagram"] : [])] as const)
-        : ([options.platform] as const);
 
-    for (const platform of platforms) {
+    for (const platform of options.targets) {
       try {
         if (platform === "instagram") {
           if (!account.instagramId) {
@@ -188,24 +213,20 @@ export async function publishToAllPlatforms(
   }
 ): Promise<PublishResult[]> {
   const results: PublishResult[] = [];
-  const publishMeta = options.platform !== "linkedin";
-  const publishLinkedIn =
-    options.platform === "linkedin" ||
-    options.platform === "all" ||
-    options.includeLinkedIn === true;
+  const metaTargets = resolveMetaSubPlatforms(options.platform);
+  const publishLinkedIn = shouldPublishLinkedIn(
+    options.platform,
+    options.includeLinkedIn
+  );
 
-  if (publishMeta && options.platform !== "linkedin") {
-    const metaPlatform =
-      options.platform === "all" ? ("both" as const) : options.platform;
-    if (options.accountIds.length > 0) {
-      const metaResults = await publishToAccounts(user, {
-        accountIds: options.accountIds,
-        message: options.message,
-        platform: metaPlatform,
-        imageUrl: options.imageUrl,
-      });
-      results.push(...metaResults);
-    }
+  if (metaTargets.length > 0 && options.accountIds.length > 0) {
+    const metaResults = await publishToAccounts(user, {
+      accountIds: options.accountIds,
+      message: options.message,
+      targets: metaTargets,
+      imageUrl: options.imageUrl,
+    });
+    results.push(...metaResults);
   }
 
   if (publishLinkedIn) {
@@ -279,7 +300,7 @@ export async function publishDueScheduledPosts() {
           message: item.message,
           platform,
           imageUrl: item.imageUrl || undefined,
-          includeLinkedIn: platform === "all" || platform === "linkedin",
+          includeLinkedIn: shouldPublishLinkedIn(platform),
         }
       );
 

@@ -89,7 +89,7 @@ export default function PostsPage() {
 
   const [topic, setTopic] = useState("");
   const [message, setMessage] = useState("");
-  const [platform, setPlatform] = useState<ComposePlatform>("all");
+  const [platform, setPlatform] = useState<ComposePlatform>("facebook");
   const [includeLinkedIn, setIncludeLinkedIn] = useState(true);
   const [linkedInAuth, setLinkedInAuth] = useState<LinkedInAuth>({
     authenticated: false,
@@ -188,13 +188,36 @@ export default function PostsPage() {
     return false;
   }, [platform, hasInstagramOnTargets]);
 
+  const publishLinkedIn = useMemo(
+    () =>
+      includeLinkedIn &&
+      linkedInAuth.authenticated &&
+      (platform === "linkedin" || platform === "all"),
+    [includeLinkedIn, linkedInAuth.authenticated, platform]
+  );
+
+  const publishDestinations = useMemo(() => {
+    const parts: string[] = [];
+    if (platform === "facebook" || platform === "both" || platform === "all") {
+      parts.push(`Facebook (${targetAccounts.length})`);
+    }
+    if (
+      (platform === "instagram" || platform === "both" || platform === "all") &&
+      hasInstagramOnTargets
+    ) {
+      parts.push(
+        `Instagram (${targetAccounts.filter((a) => a.instagramId).length})`
+      );
+    }
+    if (publishLinkedIn) {
+      parts.push("LinkedIn (1)");
+    }
+    return parts;
+  }, [platform, targetAccounts, hasInstagramOnTargets, publishLinkedIn]);
+
   const targetCount = useMemo(() => {
     let count = 0;
     const publishMeta = platform !== "linkedin";
-    const publishLi =
-      includeLinkedIn &&
-      linkedInAuth.authenticated &&
-      (platform === "linkedin" || platform === "all");
 
     if (publishMeta) {
       if (platform === "facebook" || platform === "all" || platform === "both") {
@@ -207,12 +230,11 @@ export default function PostsPage() {
         count += targetAccounts.filter((a) => a.instagramId).length;
       }
     }
-    if (publishLi) count += 1;
+    if (publishLinkedIn) count += 1;
     return count;
   }, [
     platform,
-    includeLinkedIn,
-    linkedInAuth.authenticated,
+    publishLinkedIn,
     targetAccounts,
     hasInstagramOnTargets,
   ]);
@@ -222,6 +244,14 @@ export default function PostsPage() {
       setPlatform("facebook");
     }
   }, [hasInstagramOnTargets, platform]);
+
+  useEffect(() => {
+    if (platform === "all" || platform === "linkedin") {
+      setIncludeLinkedIn(true);
+    } else {
+      setIncludeLinkedIn(false);
+    }
+  }, [platform]);
 
   function toggleAccount(id: string) {
     setPostToAll(false);
@@ -370,7 +400,7 @@ export default function PostsPage() {
         imageUrl: imageUrl || undefined,
         keywords: selectedKeywords,
         publishNow,
-        includeLinkedIn,
+        includeLinkedIn: platform === "all" || platform === "linkedin" ? includeLinkedIn : false,
         scheduledAt: publishNow ? undefined : scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       };
 
@@ -609,7 +639,6 @@ export default function PostsPage() {
                     onChange={(e) => setPlatform(e.target.value as ComposePlatform)}
                     className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
                   >
-                    <option value="all">All platforms (Meta + LinkedIn)</option>
                     <option value="facebook">Facebook only</option>
                     <option value="instagram" disabled={!hasInstagramOnTargets}>
                       Instagram only{!hasInstagramOnTargets ? " (not linked)" : ""}
@@ -617,10 +646,16 @@ export default function PostsPage() {
                     <option value="both" disabled={!hasInstagramOnTargets}>
                       Facebook + Instagram{!hasInstagramOnTargets ? " (IG not linked)" : ""}
                     </option>
+                    <option value="all">All platforms (Meta + LinkedIn)</option>
                     <option value="linkedin" disabled={!linkedInAuth.authenticated}>
                       LinkedIn only{!linkedInAuth.authenticated ? " (not connected)" : ""}
                     </option>
                   </select>
+                  {publishDestinations.length > 0 && (
+                    <p className="text-xs text-[var(--muted)] mt-2">
+                      Will publish to: {publishDestinations.join(" · ")}
+                    </p>
+                  )}
                   {!hasInstagramOnTargets && (
                     <p className="text-xs text-yellow-400 mt-2">
                       Instagram is not linked to your page yet. Use Facebook only, or link @arfadevelopers in Meta Business Suite.
@@ -694,7 +729,13 @@ export default function PostsPage() {
                   placeholder="Upload above, generate with AI, or paste image URL"
                 />
                 <p className="text-xs text-[var(--muted)] mt-1.5">
-                  Attached to Facebook, Instagram, and LinkedIn when provided.
+                  {platform === "instagram"
+                    ? "Attached to Instagram only."
+                    : platform === "facebook"
+                      ? "Attached to Facebook only when provided."
+                      : platform === "linkedin"
+                        ? "Attached to LinkedIn when provided."
+                        : "Attached to each selected platform when provided."}
                   {needsImage ? " Required for Instagram." : ""}
                 </p>
               </div>
