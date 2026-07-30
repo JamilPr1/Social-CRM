@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  MEMBER
+}
+
+enum Permission {
+  VIEW
+  POST
+  REPLY
+  BOOST
+  MANAGE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(MEMBER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accountAccess AccountAccess[]
+  sessions      Session[]
+  activityLogs  ActivityLog[]
+  connectedAccounts MetaAccount[] @relation("ConnectedBy")
+  linkedInConnection LinkedInConnection?
+  linkedInPosts      LinkedInPost[]
+  linkedInLeads      LinkedInLead[]
+  jobApplications    JobApplication[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model MetaAccount {
+  id              String   @id @default(cuid())
+  pageId          String   @unique
+  pageName        String
+  pageUsername    String?
+  pagePicture     String?
+  pageAccessToken String
+  instagramId     String?
+  instagramUsername String?
+  connectedById   String
+  isActive        Boolean  @default(true)
+  tokenExpiresAt  DateTime?
+  lastSyncedAt    DateTime?
+  adAccountId     String?
+  adAccountName   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  connectedBy User            @relation("ConnectedBy", fields: [connectedById], references: [id])
+  access      AccountAccess[]
+  posts       Post[]
+  comments    Comment[]
+  boosts      BoostRecord[]
+
+  @@index([connectedById])
+}
+
+model AccountAccess {
+  id            String       @id @default(cuid())
+  userId        String
+  metaAccountId String
+  permissions   String       // JSON array of Permission values
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metaAccount MetaAccount @relation(fields: [metaAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, metaAccountId])
+  @@index([userId])
+  @@index([metaAccountId])
+}
+
+model Post {
+  id            String   @id @default(cuid())
+  metaAccountId String
+  metaPostId    String
+  message       String?
+  mediaUrl      String?
+  mediaType     String?
+  permalink     String?
+  platform      String   @default("facebook")
+  publishedAt   DateTime
+  syncedAt      DateTime @default(now())
+
+  metaAccount MetaAccount @relation(fields: [metaAccountId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+  boosts      BoostRecord[]
+
+  @@unique([metaAccountId, metaPostId])
+  @@index([metaAccountId])
+  @@index([metaAccountId, publishedAt])
+}
+
+model Comment {
+  id            String   @id @default(cuid())
+  metaAccountId String
+  postId        String?
+  metaCommentId String   @unique
+  metaPostId    String
+  message       String
+  authorName    String?
+  authorId      String?
+  parentId      String?
+  isReplied     Boolean  @default(false)
+  createdAt     DateTime
+  syncedAt      DateTime @default(now())
+
+  metaAccount MetaAccount @relation(fields: [metaAccountId], references: [id], onDelete: Cascade)
+  post        Post?       @relation(fields: [postId], references: [id], onDelete: SetNull)
+
+  @@index([metaAccountId])
+  @@index([metaAccountId, createdAt])
+  @@index([postId])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model BoostRecord {
+  id              String   @id @default(cuid())
+  metaAccountId   String
+  postId          String?
+  metaPostId      String
+  metaCampaignId  String?
+  metaAdSetId     String?
+  metaAdId        String?
+  metaCreativeId  String?
+  dailyBudget     Int
+  durationDays    Int
+  status          String   @default("PENDING")
+  objective       String   @default("OUTCOME_ENGAGEMENT")
+  targeting       String?
+  errorMessage    String?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  metaAccount MetaAccount @relation(fields: [metaAccountId], references: [id], onDelete: Cascade)
+  post        Post?       @relation(fields: [postId], references: [id], onDelete: SetNull)
+
+  @@index([metaAccountId])
+  @@index([metaPostId])
+  @@index([status])
+}
+
+model SeoKeyword {
+  id        String   @id @default(cuid())
+  keyword   String   @unique
+  createdAt DateTime @default(now())
+}
+
+model ScheduledPost {
+  id             String    @id @default(cuid())
+  createdById    String
+  accountIds     String    // JSON array of meta account ids
+  platform       String    @default("facebook")
+  topic          String?
+  message        String
+  keywords       String?   // JSON array
+  imageUrl       String?
+  scheduledAt    DateTime?
+  status         String    @default("DRAFT")
+  publishResults String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdById])
+}
+
+model MetaConnectionLog {
+  id        String   @id @default(cuid())
+  userId    String
+  status    String
+  diagnosis String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ─── LinkedIn Integration (ported from linkedin-automation-suite) ───
+
+model LinkedInConnection {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  personUrn    String?
+  personName   String?
+  personEmail  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LinkedInPost {
+  id              String    @id @default(cuid())
+  userId          String
+  content         String
+  visibility      String    @default("PUBLIC")
+  scheduledAt     DateTime?
+  status          String    @default("draft")
+  source          String    @default("manual")
+  sourceId        String?
+  linkedinPostUrn String?
+  impressions     Int       @default(0)
+  commentCount    Int       @default(0)
+  reactionCount   Int       @default(0)
+  reshareCount    Int       @default(0)
+  errorMessage    String?
+  publishedAt     DateTime?
+  analyticsSyncedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments LinkedInComment[]
+
+  @@index([userId, status])
+  @@index([userId, scheduledAt])
+}
+
+model LinkedInComment {
+  id               String   @id @default(cuid())
+  linkedInPostId   String
+  linkedInCommentId String  @unique
+  message          String
+  authorName       String?
+  createdAt        DateTime
+  syncedAt         DateTime @default(now())
+
+  post LinkedInPost @relation(fields: [linkedInPostId], references: [id], onDelete: Cascade)
+
+  @@index([linkedInPostId])
+}
+
+model LinkedInLead {
+  id             String    @id @default(cuid())
+  userId         String
+  name           String
+  company        String?
+  title          String?
+  linkedinUrl    String?
+  email          String?
+  phone          String?
+  status         String    @default("new")
+  priority       String    @default("medium")
+  source         String?
+  notes          String?
+  lastContactAt  DateTime?
+  nextFollowUpAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activities LinkedInLeadActivity[]
+
+  @@index([userId, status])
+  @@index([userId, nextFollowUpAt])
+}
+
+model LinkedInLeadActivity {
+  id           String   @id @default(cuid())
+  leadId       String
+  activityType String
+  content      String?
+  createdAt    DateTime @default(now())
+
+  lead LinkedInLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model JobApplication {
+  id              String    @id @default(cuid())
+  userId          String
+  jobTitle        String
+  company         String
+  jobUrl          String?
+  jobDescription  String?
+  location        String?
+  salaryRange     String?
+  status          String    @default("draft")
+  tailoredResume  String?
+  coverLetter     String?
+  matchScore      Int?
+  notes           String?
+  appliedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model PipelineSyncLog {
+  id            String   @id @default(cuid())
+  userId        String
+  source        String
+  itemsImported Int      @default(0)
+  status        String?
+  message       String?
+  syncedAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([syncedAt])
+}
