@@ -33,7 +33,14 @@ export const linkedInEnv = {
 };
 
 export function getLinkedInScopes() {
-  const base = ["openid", "profile", "email", "w_member_social"];
+  const base = [
+    "openid",
+    "profile",
+    "email",
+    "w_member_social",
+    "w_organization_social",
+    "r_organization_social",
+  ];
   const extra = linkedInEnv.extraScopes
     .split(/[\s,]+/)
     .map((s) => s.trim())

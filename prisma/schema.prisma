@@ -253,6 +253,7 @@ model LinkedInConnection {
   personUrn    String?
   personName   String?
   personEmail  String?
+  managedOrganizations String? // JSON: [{ id, urn, name }]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

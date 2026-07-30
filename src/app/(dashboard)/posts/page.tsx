@@ -77,6 +77,8 @@ interface LinkedInAuth {
   authenticated: boolean;
   shared: boolean;
   personName: string | null;
+  publishTargetCount: number;
+  organizations: Array<{ id: string; urn: string; name: string }>;
 }
 
 type Tab = "published" | "compose" | "scheduled";
@@ -100,6 +102,8 @@ export default function PostsPage() {
     authenticated: false,
     shared: false,
     personName: null,
+    publishTargetCount: 0,
+    organizations: [],
   });
   const [isAdmin, setIsAdmin] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
@@ -176,6 +180,8 @@ export default function PostsPage() {
           authenticated: Boolean(d.auth?.authenticated),
           shared: Boolean(d.auth?.shared),
           personName: d.auth?.personName || d.auth?.profile?.name || null,
+          publishTargetCount: d.auth?.publishTargetCount ?? 0,
+          organizations: d.auth?.organizations || [],
         })
       );
     fetch("/api/auth/me")
@@ -221,10 +227,11 @@ export default function PostsPage() {
       );
     }
     if (publishLinkedIn) {
-      parts.push("LinkedIn (1)");
+      const liCount = Math.max(linkedInAuth.publishTargetCount, 1);
+      parts.push(`LinkedIn (${liCount})`);
     }
     return parts;
-  }, [platform, targetAccounts, hasInstagramOnTargets, publishLinkedIn]);
+  }, [platform, targetAccounts, hasInstagramOnTargets, publishLinkedIn, linkedInAuth.publishTargetCount]);
 
   const targetCount = useMemo(() => {
     let count = 0;
@@ -890,7 +897,9 @@ export default function PostsPage() {
                   <span>
                     LinkedIn
                     {linkedInAuth.authenticated
-                      ? ` — ${linkedInAuth.personName || "Connected"}`
+                      ? linkedInAuth.publishTargetCount > 1
+                        ? ` — profile + ${linkedInAuth.organizations.length} company page(s)`
+                        : ` — ${linkedInAuth.personName || "Connected"}`
                       : " — not connected"}
                   </span>
                 </label>

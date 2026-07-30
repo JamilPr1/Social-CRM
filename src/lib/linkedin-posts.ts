@@ -92,7 +92,15 @@ export async function publishLinkedInPost(userId: string, id: string, imageUrl?:
   if (post.status === "published") throw new Error("Post already published");
 
   try {
-    const result = await createLinkedInPost(userId, post.content, post.visibility, imageUrl);
+    const authorUrn =
+      post.sourceId && post.sourceId.startsWith("urn:li:") ? post.sourceId : undefined;
+    const result = await createLinkedInPost(
+      userId,
+      post.content,
+      post.visibility,
+      imageUrl,
+      authorUrn
+    );
     const urn = result.id;
 
     return prisma.linkedInPost.update({

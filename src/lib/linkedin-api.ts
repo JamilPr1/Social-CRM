@@ -8,6 +8,103 @@ const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_API = "https://api.linkedin.com/rest";
 
+export type LinkedInManagedOrg = { id: string; urn: string; name: string };
+
+const LINKEDIN_POST_ROLES = new Set([
+  "ADMINISTRATOR",
+  "CONTENT_ADMIN",
+  "DIRECT_SPONSORED_CONTENT_POSTER",
+]);
+
+export function parseManagedOrganizations(json: string | null | undefined): LinkedInManagedOrg[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json) as LinkedInManagedOrg[];
+    return Array.isArray(parsed) ? parsed.filter((o) => o.urn && o.name) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchLinkedInOrganizations(userId: string): Promise<LinkedInManagedOrg[]> {
+  try {
+    const data = (await linkedInRequest(
+      userId,
+      "/organizationAcls?q=roleAssignee&count=100"
+    )) as {
+      elements?: Array<{
+        role?: string;
+        organization?: string;
+        "organization~"?: { id?: number; localizedName?: string };
+      }>;
+    };
+
+    const orgs: LinkedInManagedOrg[] = [];
+    const seen = new Set<string>();
+
+    for (const el of data?.elements || []) {
+      if (el.role && !LINKEDIN_POST_ROLES.has(el.role)) continue;
+
+      const expanded = el["organization~"];
+      const urn =
+        (typeof el.organization === "string" && el.organization) ||
+        (expanded?.id ? `urn:li:organization:${expanded.id}` : null);
+      if (!urn || seen.has(urn)) continue;
+
+      const id = expanded?.id ? String(expanded.id) : urn.split(":").pop() || urn;
+      seen.add(urn);
+      orgs.push({
+        id,
+        urn,
+        name: expanded?.localizedName || `Company Page ${id}`,
+      });
+    }
+
+    if (orgs.length > 0) return orgs;
+
+    // Fallback without organization expansion
+    for (const el of data?.elements || []) {
+      if (el.role && !LINKEDIN_POST_ROLES.has(el.role)) continue;
+      if (typeof el.organization !== "string" || seen.has(el.organization)) continue;
+      const id = el.organization.split(":").pop() || el.organization;
+      seen.add(el.organization);
+      orgs.push({ id, urn: el.organization, name: `Company Page ${id}` });
+    }
+
+    return orgs;
+  } catch (err) {
+    console.warn("LinkedIn organizations fetch failed:", err);
+    return [];
+  }
+}
+
+export async function syncLinkedInOrganizations(userId: string): Promise<LinkedInManagedOrg[]> {
+  const orgs = await fetchLinkedInOrganizations(userId);
+  await prisma.linkedInConnection.update({
+    where: { userId },
+    data: { managedOrganizations: JSON.stringify(orgs) },
+  });
+  return orgs;
+}
+
+export async function getLinkedInPublishTargets(userId: string) {
+  const conn = await getLinkedInConnection(userId);
+  if (!conn) return [];
+
+  const targets: Array<{ urn: string; name: string; type: "person" | "organization" }> = [];
+  if (conn.personUrn) {
+    targets.push({
+      urn: conn.personUrn,
+      name: conn.personName || "LinkedIn Profile",
+      type: "person",
+    });
+  }
+  for (const org of parseManagedOrganizations(conn.managedOrganizations)) {
+    targets.push({ urn: org.urn, name: org.name, type: "organization" });
+  }
+  return targets;
+}
+
 export function getLinkedInAuthUrl(state: string, redirectUri?: string) {
   const uri = redirectUri || linkedInEnv.redirectUri;
   const params = new URLSearchParams({
@@ -220,10 +317,11 @@ export async function createLinkedInPost(
   userId: string,
   content: string,
   visibility = "PUBLIC",
-  imageUrl?: string
+  imageUrl?: string,
+  authorUrn?: string
 ) {
   let conn = await getLinkedInConnection(userId);
-  if (!conn?.personUrn) {
+  if (!conn?.personUrn && !authorUrn) {
     const token = await getValidLinkedInAccessToken(userId);
     if (token) {
       const profile = await fetchLinkedInProfile(token);
@@ -234,8 +332,8 @@ export async function createLinkedInPost(
     }
   }
 
-  const author = conn?.personUrn;
-  if (!author) throw new Error("Could not determine LinkedIn person URN. Re-authenticate.");
+  const author = authorUrn || conn?.personUrn;
+  if (!author) throw new Error("Could not determine LinkedIn author URN. Re-authenticate.");
 
   const postBody: Record<string, unknown> = {
     author,
@@ -328,6 +426,7 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
   const conn = await getLinkedInConnection(ownerId);
   const authenticated = Boolean(conn?.accessToken);
   const shared = ownerId !== actingUserId;
+  const organizations = parseManagedOrganizations(conn?.managedOrganizations);
 
   let profile: { name?: string; email?: string } | null = null;
   if (authenticated) {
@@ -348,6 +447,9 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
     profile,
     expiresAt: conn?.expiresAt?.toISOString() || null,
     personName: conn?.personName || null,
+    organizations,
+    publishTargetCount:
+      (conn?.personUrn ? 1 : 0) + organizations.length,
   };
 }
 

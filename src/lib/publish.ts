@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 import { getAccessibleAccounts, getAccountWithAccess, getDecryptedToken, logActivity } from "./accounts";
 import { createPagePost, createInstagramPost } from "./meta-api";
 import { syncPostsForAccount } from "./sync";
-import { getLinkedInConnection, resolveLinkedInOwnerId } from "./linkedin-api";
+import { getLinkedInConnection, resolveLinkedInOwnerId, getLinkedInPublishTargets } from "./linkedin-api";
 import { addLinkedInPost, publishLinkedInPost } from "./linkedin-posts";
 import type { SessionUser } from "@/types/session";
 
@@ -64,56 +64,83 @@ export async function publishLinkedInForUser(
   message: string,
   scheduledAt?: string | null,
   imageUrl?: string
-): Promise<PublishResult> {
+): Promise<PublishResult[]> {
   const linkedInOwnerId = await resolveLinkedInOwnerId(userId);
   const conn = linkedInOwnerId
     ? await getLinkedInConnection(linkedInOwnerId)
     : null;
-  const pageName = conn?.personName || "LinkedIn";
   if (!conn || !linkedInOwnerId) {
-    return {
-      accountId: "linkedin",
-      pageName,
-      platform: "linkedin",
-      success: false,
-      error: "LinkedIn not connected",
-    };
+    return [
+      {
+        accountId: "linkedin",
+        pageName: "LinkedIn",
+        platform: "linkedin",
+        success: false,
+        error: "LinkedIn not connected",
+      },
+    ];
   }
 
-  try {
-    const post = await addLinkedInPost(linkedInOwnerId, {
-      content: message,
-      scheduledAt: scheduledAt || null,
-      source: "crm_compose",
-    });
-
-    if (scheduledAt) {
-      return {
+  const targets = await getLinkedInPublishTargets(linkedInOwnerId);
+  if (targets.length === 0) {
+    return [
+      {
         accountId: "linkedin",
-        pageName,
+        pageName: conn.personName || "LinkedIn",
+        platform: "linkedin",
+        success: false,
+        error: "No LinkedIn publish targets (profile or company pages)",
+      },
+    ];
+  }
+
+  const results: PublishResult[] = [];
+
+  for (const target of targets) {
+    try {
+      if (scheduledAt) {
+        const post = await addLinkedInPost(linkedInOwnerId, {
+          content: message,
+          scheduledAt,
+          source: "crm_compose",
+          sourceId: target.urn,
+        });
+        results.push({
+          accountId: target.urn,
+          pageName: target.name,
+          platform: "linkedin",
+          success: true,
+          metaPostId: post.id,
+        });
+        continue;
+      }
+
+      const post = await addLinkedInPost(linkedInOwnerId, {
+        content: message,
+        scheduledAt: null,
+        source: "crm_compose",
+        sourceId: target.urn,
+      });
+      const published = await publishLinkedInPost(linkedInOwnerId, post.id, imageUrl);
+      results.push({
+        accountId: target.urn,
+        pageName: target.name,
         platform: "linkedin",
         success: true,
-        metaPostId: post.id,
-      };
+        metaPostId: published.linkedinPostUrn || post.id,
+      });
+    } catch (err) {
+      results.push({
+        accountId: target.urn,
+        pageName: target.name,
+        platform: "linkedin",
+        success: false,
+        error: err instanceof Error ? err.message : "LinkedIn publish failed",
+      });
     }
-
-    const published = await publishLinkedInPost(linkedInOwnerId, post.id, imageUrl);
-    return {
-      accountId: "linkedin",
-      pageName,
-      platform: "linkedin",
-      success: true,
-      metaPostId: published.linkedinPostUrn || post.id,
-    };
-  } catch (err) {
-    return {
-      accountId: "linkedin",
-      pageName,
-      platform: "linkedin",
-      success: false,
-      error: err instanceof Error ? err.message : "LinkedIn publish failed",
-    };
   }
+
+  return results;
 }
 
 export async function publishToAccounts(
@@ -246,14 +273,13 @@ export async function publishToAllPlatforms(
   }
 
   if (publishLinkedIn) {
-    results.push(
-      await publishLinkedInForUser(
-        user.id,
-        options.message,
-        options.scheduledAt,
-        options.imageUrl
-      )
+    const linkedInResults = await publishLinkedInForUser(
+      user.id,
+      options.message,
+      options.scheduledAt,
+      options.imageUrl
     );
+    results.push(...linkedInResults);
   }
 
   return results;

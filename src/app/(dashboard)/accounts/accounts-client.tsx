@@ -22,7 +22,8 @@ export function AccountsClient({
     shared: boolean;
     personName: string | null;
     email: string | null;
-  }>({ authenticated: false, shared: false, personName: null, email: null });
+    organizations: Array<{ id: string; urn: string; name: string }>;
+  }>({ authenticated: false, shared: false, personName: null, email: null, organizations: [] });
 
   useEffect(() => {
     fetch("/api/linkedin/status")
@@ -33,6 +34,7 @@ export function AccountsClient({
           shared: Boolean(d.auth?.shared),
           personName: d.auth?.personName || d.auth?.profile?.name || null,
           email: d.auth?.profile?.email || null,
+          organizations: d.auth?.organizations || [],
         })
       );
   }, []);
@@ -49,7 +51,7 @@ export function AccountsClient({
 
   async function disconnectLinkedIn() {
     await fetch("/api/linkedin/status", { method: "DELETE" });
-    setLinkedIn({ authenticated: false, shared: false, personName: null, email: null });
+    setLinkedIn({ authenticated: false, shared: false, personName: null, email: null, organizations: [] });
   }
 
   return (
@@ -173,6 +175,21 @@ export function AccountsClient({
                   {linkedIn.shared ? "Connected by admin · shared with team" : "Connected"}
                 </p>
               </div>
+              {linkedIn.organizations.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">
+                    Company pages (posts go here too)
+                  </p>
+                  {linkedIn.organizations.map((org) => (
+                    <div
+                      key={org.urn}
+                      className="p-3 rounded-lg border border-[var(--border)] text-sm"
+                    >
+                      {org.name}
+                    </div>
+                  ))}
+                </div>
+              )}
               {isAdmin && !linkedIn.shared && (
                 <div className="flex gap-3">
                   <a

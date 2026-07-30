@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSessionUser } from "@/lib/auth";
-import { exchangeLinkedInCode, fetchLinkedInProfile, saveLinkedInConnection } from "@/lib/linkedin-api";
+import { exchangeLinkedInCode, fetchLinkedInProfile, saveLinkedInConnection, syncLinkedInOrganizations } from "@/lib/linkedin-api";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -34,6 +34,11 @@ export async function GET(request: NextRequest) {
     const tokenData = await exchangeLinkedInCode(code, redirectUri);
     const profile = await fetchLinkedInProfile(tokenData.access_token);
     await saveLinkedInConnection(user.id, tokenData, profile || undefined);
+    try {
+      await syncLinkedInOrganizations(user.id);
+    } catch {
+      /* org scope may not be approved yet */
+    }
     return NextResponse.redirect(new URL("/accounts?connected=linkedin", request.url));
   } catch (err) {
     const message = err instanceof Error ? err.message : "OAuth failed";
