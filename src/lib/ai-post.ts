@@ -1,8 +1,10 @@
 import "server-only";
 
 import { buildSeoPost, normalizeKeyword } from "./seo-post";
-import { isKimiConfigured } from "./ai-config";
-import { kimiChat } from "./kimi";
+import { isAnyAiConfigured } from "./ai-config";
+import { aiChat } from "./ai-chat";
+
+export type PostAiProvider = "gemini" | "groq" | "kimi" | "template";
 
 export async function generatePostCopy(options: {
   topic: string;
@@ -13,12 +15,12 @@ export async function generatePostCopy(options: {
 }): Promise<{
   message: string;
   hashtags: string[];
-  provider: "kimi" | "template";
+  provider: PostAiProvider;
 }> {
   const { topic, keywords, callToAction, brandName, platform } = options;
   const uniqueKeywords = [...new Set(keywords.map(normalizeKeyword).filter(Boolean))];
 
-  if (!isKimiConfigured()) {
+  if (!isAnyAiConfigured()) {
     const fallback = buildSeoPost({ topic, keywords: uniqueKeywords, callToAction, brandName });
     return { ...fallback, provider: "template" };
   }
@@ -39,18 +41,22 @@ Return ONLY the post text — no titles, quotes, or markdown fences.`;
   if (brandName?.trim()) userParts.push(`Brand: ${brandName.trim()}`);
   if (callToAction?.trim()) userParts.push(`Call to action: ${callToAction.trim()}`);
 
-  const message = await kimiChat(
-    [
-      { role: "system", content: system },
-      { role: "user", content: userParts.join("\n") },
-    ],
-    { temperature: 0.75, maxTokens: 800 }
-  );
+  try {
+    const { content, provider } = await aiChat(
+      [
+        { role: "system", content: system },
+        { role: "user", content: userParts.join("\n") },
+      ],
+      { temperature: 0.75, maxTokens: 800 }
+    );
 
-  const hashtagMatches = message.match(/#[\w]+/g) || [];
-  const hashtags = [...new Set(hashtagMatches.map((h) => h.toLowerCase()))];
-
-  return { message: message.trim(), hashtags, provider: "kimi" };
+    const hashtagMatches = content.match(/#[\w]+/g) || [];
+    const hashtags = [...new Set(hashtagMatches.map((h) => h.toLowerCase()))];
+    return { message: content.trim(), hashtags, provider };
+  } catch {
+    const fallback = buildSeoPost({ topic, keywords: uniqueKeywords, callToAction, brandName });
+    return { ...fallback, provider: "template" };
+  }
 }
 
 export async function generateImagePrompt(options: {
@@ -58,24 +64,27 @@ export async function generateImagePrompt(options: {
   keywords?: string[];
 }): Promise<string> {
   const { topic, keywords = [] } = options;
+  const fallback = `Professional social media marketing image about ${topic}${keywords.length ? `, ${keywords.slice(0, 3).join(", ")}` : ""}, clean modern design, high quality, no text overlay`;
 
-  if (!isKimiConfigured()) {
-    const kw = keywords.slice(0, 3).join(", ");
-    return `Professional social media marketing image about ${topic}${kw ? `, ${kw}` : ""}, clean modern design, high quality, no text overlay`;
+  if (!isAnyAiConfigured()) return fallback;
+
+  try {
+    const { content } = await aiChat(
+      [
+        {
+          role: "system",
+          content:
+            "You write short image generation prompts for social media marketing visuals. Output one English prompt only, under 40 words, photorealistic or clean illustration style, no text in image.",
+        },
+        {
+          role: "user",
+          content: `Topic: ${topic}\nKeywords: ${keywords.join(", ") || "none"}`,
+        },
+      ],
+      { temperature: 0.8, maxTokens: 120 }
+    );
+    return content;
+  } catch {
+    return fallback;
   }
-
-  return kimiChat(
-    [
-      {
-        role: "system",
-        content:
-          "You write short image generation prompts for social media marketing visuals. Output one English prompt only, under 40 words, photorealistic or clean illustration style, no text in image.",
-      },
-      {
-        role: "user",
-        content: `Topic: ${topic}\nKeywords: ${keywords.join(", ") || "none"}`,
-      },
-    ],
-    { temperature: 0.8, maxTokens: 120 }
-  );
 }

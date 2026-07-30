@@ -171,7 +171,7 @@ export default function PostsPage() {
       );
     fetch("/api/posts/generate")
       .then((r) => r.json())
-      .then((d) => setAiConfigured(Boolean(d.kimi?.configured)));
+      .then((d) => setAiConfigured(Boolean(d.gemini?.configured || d.groq?.configured || d.kimi?.configured)));
   }, [tab]);
 
   const targetAccounts = useMemo(() => {
@@ -272,9 +272,9 @@ export default function PostsPage() {
       setMessage(data.message);
       if (!topic && message) setTopic(message);
       if (data.provider === "template") {
-        setSuccess("Generated with templates — add KIMI_API_KEY for AI writing.");
+        setSuccess("Generated with built-in templates — add GEMINI_API_KEY (free) for AI writing.");
       } else {
-        setSuccess("Post generated with Kimi AI.");
+        setSuccess(`Post generated with ${data.provider} AI.`);
       }
     } catch {
       setError("Failed to generate post");
@@ -544,7 +544,7 @@ export default function PostsPage() {
                     {generating
                       ? "Generating..."
                       : aiConfigured
-                        ? "Write with Kimi AI"
+                        ? "Write with AI"
                         : "Auto-generate with SEO"}
                   </button>
                 </div>
