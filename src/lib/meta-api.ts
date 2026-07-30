@@ -2,6 +2,13 @@ import { getMetaRedirectUri } from "./app-url";
 
 const GRAPH_API = "https://graph.facebook.com/v21.0";
 
+export function getExtraMetaPageIds(): string[] {
+  return (process.env.META_EXTRA_PAGE_IDS || "")
+    .split(/[\s,]+/)
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 export interface MetaPage {
   id: string;
   name: string;
@@ -282,27 +289,26 @@ export async function getUserPages(userToken: string): Promise<MetaPage[]> {
     errors.push(bizData.error?.message || "Could not load businesses");
   }
 
+  const debug = await debugAccessToken(userToken);
+  const extraPageIds = new Set<string>(getExtraMetaPageIds());
+  for (const gs of debug.granular_scopes || []) {
+    if (gs.scope.startsWith("pages_") && gs.target_ids?.length) {
+      for (const id of gs.target_ids) extraPageIds.add(id);
+    }
+  }
+  const missingIds = [...extraPageIds].filter((id) => !seen.has(id));
+  if (missingIds.length > 0) {
+    const extraPages = await fetchPagesByIds(missingIds, userToken, fields);
+    addPages(extraPages);
+  }
+
   if (pages.length === 0) {
-    const debug = await debugAccessToken(userToken);
-    const pageIds = new Set<string>();
-    for (const gs of debug.granular_scopes || []) {
-      if (gs.scope.startsWith("pages_") && gs.target_ids?.length) {
-        for (const id of gs.target_ids) pageIds.add(id);
-      }
-    }
-
-    if (pageIds.size > 0) {
-      const granularPages = await fetchPagesByIds([...pageIds], userToken, fields);
-      addPages(granularPages);
-    }
-
-    if (pages.length === 0) {
-      console.error("No pages found.", {
-        scopes: debug.scopes,
-        granular_scopes: debug.granular_scopes,
-        errors,
-      });
-    }
+    console.error("No pages found.", {
+      scopes: debug.scopes,
+      granular_scopes: debug.granular_scopes,
+      errors,
+      extraPageIds: [...extraPageIds],
+    });
   }
 
   return pages;

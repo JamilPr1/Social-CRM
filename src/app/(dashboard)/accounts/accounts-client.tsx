@@ -109,6 +109,37 @@ export function AccountsClient({
         </div>
       )}
 
+      <div className="mb-6 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 text-sm">
+        <h2 className="font-semibold mb-2">Where posts go when you publish</h2>
+        <ul className="space-y-1.5 text-[var(--muted)]">
+          {accounts.map((a) => (
+            <li key={a.id}>
+              <span className="text-white">Facebook:</span> {a.pageName}
+              {a.instagramId ? ` · Instagram @${a.instagramUsername}` : ""}
+            </li>
+          ))}
+          {accounts.length === 0 && (
+            <li>No Meta pages connected yet — connect or refresh pages below.</li>
+          )}
+          {linkedIn.authenticated && linkedIn.personName && (
+            <li>
+              <span className="text-white">LinkedIn:</span> {linkedIn.personName} (profile)
+            </li>
+          )}
+          {linkedIn.organizations.map((org) => (
+            <li key={org.urn}>
+              <span className="text-white">LinkedIn:</span> {org.name} (company page)
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-yellow-400/90 mt-3">
+          Facebook only allows posting to <strong>Pages</strong>, not personal profiles. If
+          &quot;Muhammad Arshad&quot; is a Page, click <strong>Refresh pages</strong> — or add its
+          Page ID to <code className="text-[var(--primary)]">META_EXTRA_PAGE_IDS</code> on Vercel
+          (61592773134015).
+        </p>
+      </div>
+
       {errorCode === "no_pages" && isAdmin && (
         <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5 text-sm">
           <p className="font-medium text-yellow-300">No Facebook Pages found</p>
@@ -174,8 +205,10 @@ export function AccountsClient({
               ))}
               {isAdmin && (
                 <p className="text-xs text-[var(--muted)] pt-2">
-                  Only see one page? Click <strong>Refresh pages</strong> after reconnecting Meta to
-                  pull all Facebook Pages you manage.
+                  Missing a Facebook Page? Click <strong>Refresh pages</strong>. If it still does
+                  not appear, add its numeric Page ID to{" "}
+                  <code className="text-[var(--primary)]">META_EXTRA_PAGE_IDS</code> in Vercel env,
+                  then refresh again.
                 </p>
               )}
             </div>

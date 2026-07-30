@@ -79,23 +79,27 @@ async function fetchLinkedInOrganizationById(
   userId: string,
   orgId: string
 ): Promise<LinkedInManagedOrg | null> {
+  const urn = `urn:li:organization:${orgId}`;
+  const fallbacks: LinkedInManagedOrg = {
+    id: orgId,
+    urn,
+    name: orgId === "102438302" ? "Arfa Developers" : `Company Page ${orgId}`,
+  };
+
   try {
     const data = (await linkedInRequest(userId, `/organizations/${orgId}`)) as {
       id?: number;
       localizedName?: string;
+      vanityName?: string;
     };
     const id = data?.id ? String(data.id) : orgId;
     return {
       id,
       urn: `urn:li:organization:${id}`,
-      name: data?.localizedName || `Company Page ${id}`,
+      name: data?.localizedName || data?.vanityName || fallbacks.name,
     };
   } catch {
-    return {
-      id: orgId,
-      urn: `urn:li:organization:${orgId}`,
-      name: `Company Page ${orgId}`,
-    };
+    return fallbacks;
   }
 }
 
@@ -145,7 +149,8 @@ export async function getLinkedInPublishTargets(userId: string) {
   for (const org of linkedInEnv.organizationIds) {
     const urn = `urn:li:organization:${org}`;
     if (!orgMap.has(urn)) {
-      orgMap.set(urn, { id: org, urn, name: `Company Page ${org}` });
+      const displayName = org === "102438302" ? "Arfa Developers" : `Company Page ${org}`;
+      orgMap.set(urn, { id: org, urn, name: displayName });
     }
   }
   for (const org of orgMap.values()) {
