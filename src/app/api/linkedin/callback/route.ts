@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSessionUser } from "@/lib/auth";
-import { exchangeLinkedInCode, fetchLinkedInProfile, saveLinkedInConnection, syncLinkedInOrganizations } from "@/lib/linkedin-api";
+import { exchangeLinkedInCode, fetchLinkedInProfile, saveLinkedInConnection, syncLinkedInOrganizations, getLinkedInConnection } from "@/lib/linkedin-api";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -39,7 +39,12 @@ export async function GET(request: NextRequest) {
     } catch {
       /* org scope may not be approved yet */
     }
-    return NextResponse.redirect(new URL("/accounts?connected=linkedin", request.url));
+    const conn = await getLinkedInConnection(user.id);
+    const hasOrgScope = conn?.grantedScopes?.includes("w_organization_social");
+    const redirect = hasOrgScope
+      ? "/accounts?connected=linkedin"
+      : "/accounts?connected=linkedin&org_warning=1";
+    return NextResponse.redirect(new URL(redirect, request.url));
   } catch (err) {
     const message = err instanceof Error ? err.message : "OAuth failed";
     return NextResponse.redirect(

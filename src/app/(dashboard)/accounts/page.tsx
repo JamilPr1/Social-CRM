@@ -16,7 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default async function AccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ connected?: string; error?: string }>;
+  searchParams: Promise<{ connected?: string; error?: string; org_warning?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) return null;
@@ -27,10 +27,12 @@ export default async function AccountsPage({
   let notice: { type: "success" | "error"; message: string } | null = null;
   if (params.connected === "true" || params.connected === "linkedin") {
     notice = {
-      type: "success",
+      type: params.org_warning === "1" ? "error" : "success",
       message:
         params.connected === "linkedin"
-          ? "LinkedIn connected successfully!"
+          ? params.org_warning === "1"
+            ? "LinkedIn connected for your profile, but organization posting was not granted. Enable company-page access in LinkedIn Developer Portal, confirm LINKEDIN_ORGANIZATION_IDS=102438302 on Vercel, redeploy, then reconnect."
+            : "LinkedIn connected successfully!"
           : "Account connected successfully!",
     };
   } else if (params.error) {

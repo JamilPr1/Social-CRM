@@ -133,6 +133,8 @@ export async function getLinkedInPublishTargets(userId: string) {
   const conn = await getLinkedInConnection(userId);
   if (!conn) return [];
 
+  const { canPostToOrg } = await resolveLinkedInOrgCapabilities(userId);
+
   const targets: Array<{ urn: string; name: string; type: "person" | "organization" }> = [];
   if (conn.personUrn) {
     targets.push({
@@ -142,7 +144,7 @@ export async function getLinkedInPublishTargets(userId: string) {
     });
   }
 
-  if (!connectionHasOrgScopes(conn)) {
+  if (!canPostToOrg) {
     return targets;
   }
 
@@ -182,8 +184,64 @@ export function linkedInNeedsOrgReconnect(
   return shouldRequestLinkedInOrgScopes() && !connectionHasOrgScopes(conn);
 }
 
-export function linkedInOrgReconnectMessage() {
+export function linkedInOrgReconnectMessage(missingFromToken = false) {
+  if (missingFromToken) {
+    return "LinkedIn did not grant organization posting permission. In LinkedIn Developer Portal, enable Share on LinkedIn with company-page access, redeploy Vercel with LINKEDIN_ORGANIZATION_IDS=102438302, then reconnect.";
+  }
   return "Reconnect LinkedIn on the Accounts page to enable company page posting (requires organization permission).";
+}
+
+/** Live check — tries org media init (requires w_organization_social). Updates DB if successful. */
+export async function probeLinkedInOrgPostingEnabled(userId: string): Promise<boolean> {
+  const conn = await getLinkedInConnection(userId);
+  if (!conn) return false;
+  if (connectionHasOrgScopes(conn)) return true;
+  if (!shouldRequestLinkedInOrgScopes()) return false;
+
+  const orgId = linkedInEnv.organizationIds[0];
+  if (!orgId) return false;
+
+  try {
+    const ownerUrn = `urn:li:organization:${orgId}`;
+    await linkedInRequest(userId, "/images?action=initializeUpload", {
+      method: "POST",
+      body: JSON.stringify({ initializeUploadRequest: { owner: ownerUrn } }),
+    });
+
+    const scopes = new Set(scopesFromTokenData({ scope: undefined }));
+    try {
+      const existing = conn.grantedScopes ? (JSON.parse(conn.grantedScopes) as string[]) : [];
+      for (const s of existing) scopes.add(s);
+    } catch {
+      /* ignore */
+    }
+    scopes.add("w_organization_social");
+    scopes.add("r_organization_social");
+
+    await prisma.linkedInConnection.update({
+      where: { userId },
+      data: { grantedScopes: JSON.stringify([...scopes]) },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function resolveLinkedInOrgCapabilities(userId: string) {
+  const conn = await getLinkedInConnection(userId);
+  const wantsOrg = shouldRequestLinkedInOrgScopes();
+  let canPostToOrg = connectionHasOrgScopes(conn);
+  if (!canPostToOrg && wantsOrg) {
+    canPostToOrg = await probeLinkedInOrgPostingEnabled(userId);
+  }
+  const missingFromToken =
+    wantsOrg && !canPostToOrg && Boolean(conn?.grantedScopes) && !connectionHasOrgScopes(conn);
+  return {
+    canPostToOrg,
+    needsReconnect: wantsOrg && !canPostToOrg,
+    missingFromToken,
+  };
 }
 
 export function getLinkedInAuthUrl(state: string, redirectUri?: string) {
@@ -222,7 +280,15 @@ export async function exchangeLinkedInCode(code: string, redirectUri?: string) {
     access_token: string;
     refresh_token?: string;
     expires_in?: number;
+    scope?: string;
   }>;
+}
+
+function scopesFromTokenData(tokenData: { scope?: string }): string[] {
+  if (tokenData.scope) {
+    return tokenData.scope.split(/\s+/).filter(Boolean);
+  }
+  return getLinkedInScopes();
 }
 
 export async function fetchLinkedInProfile(accessToken: string) {
@@ -235,14 +301,19 @@ export async function fetchLinkedInProfile(accessToken: string) {
 
 export async function saveLinkedInConnection(
   userId: string,
-  tokenData: { access_token: string; refresh_token?: string; expires_in?: number },
+  tokenData: {
+    access_token: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  },
   profile?: { sub?: string; name?: string; email?: string; personUrn?: string }
 ) {
   const expiresAt = tokenData.expires_in
     ? new Date(Date.now() + tokenData.expires_in * 1000)
     : null;
   const personUrn = profile?.personUrn || (profile?.sub ? `urn:li:person:${profile.sub}` : null);
-  const grantedScopes = JSON.stringify(getLinkedInScopes());
+  const grantedScopes = JSON.stringify(scopesFromTokenData(tokenData));
 
   return prisma.linkedInConnection.upsert({
     where: { userId },
@@ -511,9 +582,15 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
   const authenticated = Boolean(conn?.accessToken);
   const shared = ownerId !== actingUserId;
   const organizations = parseManagedOrganizations(conn?.managedOrganizations);
-  const orgPostingEnabled = connectionHasOrgScopes(conn);
-  const needsOrgReconnect = linkedInNeedsOrgReconnect(conn);
+  const orgCaps = await resolveLinkedInOrgCapabilities(ownerId);
   const publishTargets = await getLinkedInPublishTargets(ownerId);
+  const grantedScopeList = (() => {
+    try {
+      return conn?.grantedScopes ? (JSON.parse(conn.grantedScopes) as string[]) : [];
+    } catch {
+      return [];
+    }
+  })();
 
   let profile: { name?: string; email?: string } | null = null;
   if (authenticated) {
@@ -535,9 +612,12 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
     expiresAt: conn?.expiresAt?.toISOString() || null,
     personName: conn?.personName || null,
     organizations,
-    orgPostingEnabled,
-    needsOrgReconnect,
-    orgReconnectMessage: needsOrgReconnect ? linkedInOrgReconnectMessage() : null,
+    orgPostingEnabled: orgCaps.canPostToOrg,
+    needsOrgReconnect: orgCaps.needsReconnect,
+    orgReconnectMessage: orgCaps.needsReconnect
+      ? linkedInOrgReconnectMessage(orgCaps.missingFromToken)
+      : null,
+    grantedScopes: grantedScopeList,
     publishTargetCount: publishTargets.length,
   };
 }

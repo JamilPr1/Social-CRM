@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 import { getAccessibleAccounts, getAccountWithAccess, getDecryptedToken, logActivity } from "./accounts";
 import { createPagePost, createInstagramPost } from "./meta-api";
 import { syncPostsForAccount } from "./sync";
-import { getLinkedInConnection, resolveLinkedInOwnerId, getLinkedInPublishTargets, connectionHasOrgScopes, linkedInOrgReconnectMessage } from "./linkedin-api";
+import { getLinkedInConnection, resolveLinkedInOwnerId, getLinkedInPublishTargets, resolveLinkedInOrgCapabilities, linkedInOrgReconnectMessage } from "./linkedin-api";
 import { addLinkedInPost, publishLinkedInPost } from "./linkedin-posts";
 import type { SessionUser } from "@/types/session";
 
@@ -82,6 +82,7 @@ export async function publishLinkedInForUser(
   }
 
   const targets = await getLinkedInPublishTargets(linkedInOwnerId);
+  const orgCaps = await resolveLinkedInOrgCapabilities(linkedInOwnerId);
   if (targets.length === 0) {
     return [
       {
@@ -98,13 +99,13 @@ export async function publishLinkedInForUser(
 
   for (const target of targets) {
     try {
-      if (target.type === "organization" && !connectionHasOrgScopes(conn)) {
+      if (target.type === "organization" && !orgCaps.canPostToOrg) {
         results.push({
           accountId: target.urn,
           pageName: target.name,
           platform: "linkedin",
           success: false,
-          error: linkedInOrgReconnectMessage(),
+          error: linkedInOrgReconnectMessage(orgCaps.missingFromToken),
         });
         continue;
       }
