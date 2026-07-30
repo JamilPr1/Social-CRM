@@ -4,7 +4,7 @@ import { prisma } from "./prisma";
 import { getAccessibleAccounts, getAccountWithAccess, getDecryptedToken, logActivity } from "./accounts";
 import { createPagePost, createInstagramPost } from "./meta-api";
 import { syncPostsForAccount } from "./sync";
-import { getLinkedInConnection, resolveLinkedInOwnerId, getLinkedInPublishTargets } from "./linkedin-api";
+import { getLinkedInConnection, resolveLinkedInOwnerId, getLinkedInPublishTargets, connectionHasOrgScopes, linkedInOrgReconnectMessage } from "./linkedin-api";
 import { addLinkedInPost, publishLinkedInPost } from "./linkedin-posts";
 import type { SessionUser } from "@/types/session";
 
@@ -98,6 +98,17 @@ export async function publishLinkedInForUser(
 
   for (const target of targets) {
     try {
+      if (target.type === "organization" && !connectionHasOrgScopes(conn)) {
+        results.push({
+          accountId: target.urn,
+          pageName: target.name,
+          platform: "linkedin",
+          success: false,
+          error: linkedInOrgReconnectMessage(),
+        });
+        continue;
+      }
+
       if (scheduledAt) {
         const post = await addLinkedInPost(linkedInOwnerId, {
           content: message,

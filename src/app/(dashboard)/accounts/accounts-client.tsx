@@ -23,7 +23,19 @@ export function AccountsClient({
     personName: string | null;
     email: string | null;
     organizations: Array<{ id: string; urn: string; name: string }>;
-  }>({ authenticated: false, shared: false, personName: null, email: null, organizations: [] });
+    needsOrgReconnect: boolean;
+    orgReconnectMessage: string | null;
+    publishTargetCount: number;
+  }>({
+    authenticated: false,
+    shared: false,
+    personName: null,
+    email: null,
+    organizations: [],
+    needsOrgReconnect: false,
+    orgReconnectMessage: null,
+    publishTargetCount: 0,
+  });
 
   useEffect(() => {
     fetch("/api/linkedin/status")
@@ -35,6 +47,9 @@ export function AccountsClient({
           personName: d.auth?.personName || d.auth?.profile?.name || null,
           email: d.auth?.profile?.email || null,
           organizations: d.auth?.organizations || [],
+          needsOrgReconnect: Boolean(d.auth?.needsOrgReconnect),
+          orgReconnectMessage: d.auth?.orgReconnectMessage || null,
+          publishTargetCount: d.auth?.publishTargetCount ?? 0,
         })
       );
   }, []);
@@ -51,7 +66,16 @@ export function AccountsClient({
 
   async function disconnectLinkedIn() {
     await fetch("/api/linkedin/status", { method: "DELETE" });
-    setLinkedIn({ authenticated: false, shared: false, personName: null, email: null, organizations: [] });
+    setLinkedIn({
+      authenticated: false,
+      shared: false,
+      personName: null,
+      email: null,
+      organizations: [],
+      needsOrgReconnect: false,
+      orgReconnectMessage: null,
+      publishTargetCount: 0,
+    });
   }
 
   return (
@@ -129,6 +153,7 @@ export function AccountsClient({
           {linkedIn.organizations.map((org) => (
             <li key={org.urn}>
               <span className="text-white">LinkedIn:</span> {org.name} (company page)
+              {linkedIn.needsOrgReconnect ? " — reconnect required" : ""}
             </li>
           ))}
         </ul>
@@ -232,6 +257,15 @@ export function AccountsClient({
                   {linkedIn.shared ? "Connected by admin · shared with team" : "Connected"}
                 </p>
               </div>
+              {linkedIn.needsOrgReconnect && (
+                <div className="p-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-sm">
+                  <p className="font-medium text-yellow-300">Company page posting needs reconnect</p>
+                  <p className="text-[var(--muted)] mt-1">
+                    {linkedIn.orgReconnectMessage ||
+                      "Click Reconnect below and approve organization permissions for Arfa Developers."}
+                  </p>
+                </div>
+              )}
               {linkedIn.organizations.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">

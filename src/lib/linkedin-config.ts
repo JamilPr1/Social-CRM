@@ -36,12 +36,18 @@ export const linkedInEnv = {
     .filter(Boolean),
 };
 
+export function shouldRequestLinkedInOrgScopes() {
+  return (
+    process.env.LINKEDIN_ENABLE_ORG_SCOPES === "true" ||
+    linkedInEnv.organizationIds.length > 0
+  );
+}
+
 export function getLinkedInScopes() {
   const base = ["openid", "profile", "email", "w_member_social"];
-  const orgScopes =
-    process.env.LINKEDIN_ENABLE_ORG_SCOPES === "true"
-      ? ["w_organization_social", "r_organization_social"]
-      : [];
+  const orgScopes = shouldRequestLinkedInOrgScopes()
+    ? ["w_organization_social", "r_organization_social"]
+    : [];
   const extra = linkedInEnv.extraScopes
     .split(/[\s,]+/)
     .map((s) => s.trim())

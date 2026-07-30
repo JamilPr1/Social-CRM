@@ -256,6 +256,7 @@ model LinkedInConnection {
   personName   String?
   personEmail  String?
   managedOrganizations String? // JSON: [{ id, urn, name }]
+  grantedScopes      String? // JSON array of OAuth scopes granted at connect
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

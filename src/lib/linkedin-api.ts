@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "./prisma";
 import { encryptToken, decryptToken } from "./encryption";
-import { linkedInEnv, getLinkedInScopes } from "./linkedin-config";
+import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes } from "./linkedin-config";
 
 const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -142,6 +142,10 @@ export async function getLinkedInPublishTargets(userId: string) {
     });
   }
 
+  if (!connectionHasOrgScopes(conn)) {
+    return targets;
+  }
+
   const orgMap = new Map<string, LinkedInManagedOrg>();
   for (const org of parseManagedOrganizations(conn.managedOrganizations)) {
     orgMap.set(org.urn, org);
@@ -158,6 +162,28 @@ export async function getLinkedInPublishTargets(userId: string) {
   }
 
   return targets;
+}
+
+export function connectionHasOrgScopes(
+  conn: { grantedScopes?: string | null } | null
+): boolean {
+  if (!conn?.grantedScopes) return false;
+  try {
+    const scopes = JSON.parse(conn.grantedScopes) as string[];
+    return scopes.includes("w_organization_social");
+  } catch {
+    return false;
+  }
+}
+
+export function linkedInNeedsOrgReconnect(
+  conn: { grantedScopes?: string | null } | null
+): boolean {
+  return shouldRequestLinkedInOrgScopes() && !connectionHasOrgScopes(conn);
+}
+
+export function linkedInOrgReconnectMessage() {
+  return "Reconnect LinkedIn on the Accounts page to enable company page posting (requires organization permission).";
 }
 
 export function getLinkedInAuthUrl(state: string, redirectUri?: string) {
@@ -216,6 +242,7 @@ export async function saveLinkedInConnection(
     ? new Date(Date.now() + tokenData.expires_in * 1000)
     : null;
   const personUrn = profile?.personUrn || (profile?.sub ? `urn:li:person:${profile.sub}` : null);
+  const grantedScopes = JSON.stringify(getLinkedInScopes());
 
   return prisma.linkedInConnection.upsert({
     where: { userId },
@@ -227,6 +254,7 @@ export async function saveLinkedInConnection(
       personUrn,
       personName: profile?.name || null,
       personEmail: profile?.email || null,
+      grantedScopes,
     },
     update: {
       accessToken: encryptToken(tokenData.access_token),
@@ -237,6 +265,7 @@ export async function saveLinkedInConnection(
       personUrn: personUrn || undefined,
       personName: profile?.name || undefined,
       personEmail: profile?.email || undefined,
+      grantedScopes,
     },
   });
 }
@@ -482,6 +511,9 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
   const authenticated = Boolean(conn?.accessToken);
   const shared = ownerId !== actingUserId;
   const organizations = parseManagedOrganizations(conn?.managedOrganizations);
+  const orgPostingEnabled = connectionHasOrgScopes(conn);
+  const needsOrgReconnect = linkedInNeedsOrgReconnect(conn);
+  const publishTargets = await getLinkedInPublishTargets(ownerId);
 
   let profile: { name?: string; email?: string } | null = null;
   if (authenticated) {
@@ -503,8 +535,10 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
     expiresAt: conn?.expiresAt?.toISOString() || null,
     personName: conn?.personName || null,
     organizations,
-    publishTargetCount:
-      (conn?.personUrn ? 1 : 0) + organizations.length,
+    orgPostingEnabled,
+    needsOrgReconnect,
+    orgReconnectMessage: needsOrgReconnect ? linkedInOrgReconnectMessage() : null,
+    publishTargetCount: publishTargets.length,
   };
 }
 
