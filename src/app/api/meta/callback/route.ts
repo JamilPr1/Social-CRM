@@ -6,14 +6,12 @@ import {
   exchangeCodeForToken,
   getLongLivedToken,
   getUserPages,
-  getInstagramAccount,
   diagnosePageAccess,
   createFacebookPage,
 } from "@/lib/meta-api";
 import { SUGGESTED_PAGES } from "@/lib/meta-setup";
-import { getPageAdAccounts } from "@/lib/meta-ads-api";
-import { encryptToken } from "@/lib/encryption";
 import { logActivity } from "@/lib/accounts";
+import { saveMetaUserToken, upsertMetaPagesFromToken } from "@/lib/meta-sync";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -74,45 +72,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    for (const page of pages) {
-      const instagram = await getInstagramAccount(page.id, page.access_token);
-      const adAccounts = await getPageAdAccounts(page.id, page.access_token);
-      const primaryAdAccount = adAccounts.find((a) => a.account_status === 1) || adAccounts[0];
-      const tokenExpiresAt = expires_in
-        ? new Date(Date.now() + expires_in * 1000)
-        : null;
+    const tokenExpiresAt = expires_in
+      ? new Date(Date.now() + expires_in * 1000)
+      : null;
 
-      await prisma.metaAccount.upsert({
-        where: { pageId: page.id },
-        create: {
-          pageId: page.id,
-          pageName: page.name,
-          pageUsername: page.username || null,
-          pagePicture: page.picture?.data?.url || null,
-          pageAccessToken: encryptToken(page.access_token),
-          instagramId: instagram?.id || null,
-          instagramUsername: instagram?.username || null,
-          connectedById: user.id,
-          tokenExpiresAt,
-          adAccountId: primaryAdAccount?.id || null,
-          adAccountName: primaryAdAccount?.name || null,
-        },
-        update: {
-          pageName: page.name,
-          pageUsername: page.username || null,
-          pagePicture: page.picture?.data?.url || null,
-          pageAccessToken: encryptToken(page.access_token),
-          instagramId: instagram?.id || null,
-          instagramUsername: instagram?.username || null,
-          tokenExpiresAt,
-          isActive: true,
-          adAccountId: primaryAdAccount?.id || null,
-          adAccountName: primaryAdAccount?.name || null,
-        },
-      });
-    }
+    await saveMetaUserToken(user.id, longToken, expires_in);
+    const { synced, pageNames } = await upsertMetaPagesFromToken(
+      user.id,
+      longToken,
+      tokenExpiresAt
+    );
 
-    await logActivity(user.id, "CONNECT_META_ACCOUNTS", `Connected ${pages.length} page(s)`);
+    await logActivity(user.id, "CONNECT_META_ACCOUNTS", `Connected ${synced} page(s): ${pageNames.join(", ")}`);
     return NextResponse.redirect(new URL("/accounts?connected=true", request.url));
   } catch (err) {
     console.error("Meta OAuth error:", err);

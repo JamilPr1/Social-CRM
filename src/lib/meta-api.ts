@@ -448,6 +448,8 @@ export async function createInstagramPost(
   }
   const { id: containerId } = await containerRes.json();
 
+  await waitForInstagramContainer(containerId, pageToken);
+
   const publishRes = await fetch(`${GRAPH_API}/${instagramId}/media_publish`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -461,6 +463,36 @@ export async function createInstagramPost(
     throw new Error(err.error?.message || "Failed to publish Instagram post");
   }
   return publishRes.json();
+}
+
+async function waitForInstagramContainer(
+  containerId: string,
+  pageToken: string,
+  maxAttempts = 15
+) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const res = await fetch(
+      `${GRAPH_API}/${containerId}?fields=status_code&access_token=${pageToken}`
+    );
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || "Failed to check Instagram media status");
+    }
+
+    const status = data.status_code as string | undefined;
+    if (status === "FINISHED") return;
+    if (status === "ERROR") {
+      throw new Error("Instagram could not process this image. Try another file or aspect ratio.");
+    }
+
+    const delayMs = Math.min(2000 + attempt * 1000, 8000);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  throw new Error(
+    "Instagram is still processing the image. Wait a moment and try again."
+  );
 }
 
 export async function replyToComment(

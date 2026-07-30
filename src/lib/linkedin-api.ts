@@ -27,29 +27,37 @@ export function parseManagedOrganizations(json: string | null | undefined): Link
 }
 
 export async function fetchLinkedInOrganizations(userId: string): Promise<LinkedInManagedOrg[]> {
+  const fromApi = await fetchLinkedInOrganizationsFromApi(userId);
+  if (fromApi.length > 0) return fromApi;
+  return fetchLinkedInOrganizationsFromEnv(userId);
+}
+
+async function fetchLinkedInOrganizationsFromApi(userId: string): Promise<LinkedInManagedOrg[]> {
   try {
     const data = (await linkedInRequest(
       userId,
       "/organizationAcls?q=roleAssignee&count=100"
     )) as {
-      elements?: Array<{
-        role?: string;
-        organization?: string;
-        "organization~"?: { id?: number; localizedName?: string };
-      }>;
+      elements?: Array<Record<string, unknown>>;
     };
 
     const orgs: LinkedInManagedOrg[] = [];
     const seen = new Set<string>();
 
     for (const el of data?.elements || []) {
-      if (el.role && !LINKEDIN_POST_ROLES.has(el.role)) continue;
+      const role = typeof el.role === "string" ? el.role : undefined;
+      if (role && !LINKEDIN_POST_ROLES.has(role)) continue;
 
-      const expanded = el["organization~"];
-      const urn =
+      const orgRef =
         (typeof el.organization === "string" && el.organization) ||
+        (typeof el.organizationalTarget === "string" && el.organizationalTarget) ||
+        null;
+
+      const expanded = el["organization~"] as { id?: number; localizedName?: string } | undefined;
+      const urn =
+        orgRef ||
         (expanded?.id ? `urn:li:organization:${expanded.id}` : null);
-      if (!urn || seen.has(urn)) continue;
+      if (!urn || !urn.includes("organization:") || seen.has(urn)) continue;
 
       const id = expanded?.id ? String(expanded.id) : urn.split(":").pop() || urn;
       seen.add(urn);
@@ -60,17 +68,6 @@ export async function fetchLinkedInOrganizations(userId: string): Promise<Linked
       });
     }
 
-    if (orgs.length > 0) return orgs;
-
-    // Fallback without organization expansion
-    for (const el of data?.elements || []) {
-      if (el.role && !LINKEDIN_POST_ROLES.has(el.role)) continue;
-      if (typeof el.organization !== "string" || seen.has(el.organization)) continue;
-      const id = el.organization.split(":").pop() || el.organization;
-      seen.add(el.organization);
-      orgs.push({ id, urn: el.organization, name: `Company Page ${id}` });
-    }
-
     return orgs;
   } catch (err) {
     console.warn("LinkedIn organizations fetch failed:", err);
@@ -78,8 +75,49 @@ export async function fetchLinkedInOrganizations(userId: string): Promise<Linked
   }
 }
 
+async function fetchLinkedInOrganizationById(
+  userId: string,
+  orgId: string
+): Promise<LinkedInManagedOrg | null> {
+  try {
+    const data = (await linkedInRequest(userId, `/organizations/${orgId}`)) as {
+      id?: number;
+      localizedName?: string;
+    };
+    const id = data?.id ? String(data.id) : orgId;
+    return {
+      id,
+      urn: `urn:li:organization:${id}`,
+      name: data?.localizedName || `Company Page ${id}`,
+    };
+  } catch {
+    return {
+      id: orgId,
+      urn: `urn:li:organization:${orgId}`,
+      name: `Company Page ${orgId}`,
+    };
+  }
+}
+
+async function fetchLinkedInOrganizationsFromEnv(userId: string): Promise<LinkedInManagedOrg[]> {
+  const ids = linkedInEnv.organizationIds;
+  if (ids.length === 0) return [];
+
+  const orgs: LinkedInManagedOrg[] = [];
+  for (const orgId of ids) {
+    const org = await fetchLinkedInOrganizationById(userId, orgId);
+    if (org) orgs.push(org);
+  }
+  return orgs;
+}
+
 export async function syncLinkedInOrganizations(userId: string): Promise<LinkedInManagedOrg[]> {
-  const orgs = await fetchLinkedInOrganizations(userId);
+  const fromApi = await fetchLinkedInOrganizationsFromApi(userId);
+  const envOrgs = await fetchLinkedInOrganizationsFromEnv(userId);
+  const merged = new Map<string, LinkedInManagedOrg>();
+  for (const org of [...fromApi, ...envOrgs]) merged.set(org.urn, org);
+  const orgs = [...merged.values()];
+
   await prisma.linkedInConnection.update({
     where: { userId },
     data: { managedOrganizations: JSON.stringify(orgs) },
@@ -99,9 +137,21 @@ export async function getLinkedInPublishTargets(userId: string) {
       type: "person",
     });
   }
+
+  const orgMap = new Map<string, LinkedInManagedOrg>();
   for (const org of parseManagedOrganizations(conn.managedOrganizations)) {
+    orgMap.set(org.urn, org);
+  }
+  for (const org of linkedInEnv.organizationIds) {
+    const urn = `urn:li:organization:${org}`;
+    if (!orgMap.has(urn)) {
+      orgMap.set(urn, { id: org, urn, name: `Company Page ${org}` });
+    }
+  }
+  for (const org of orgMap.values()) {
     targets.push({ urn: org.urn, name: org.name, type: "organization" });
   }
+
   return targets;
 }
 

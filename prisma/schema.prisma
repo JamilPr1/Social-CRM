@@ -43,6 +43,8 @@ model User {
   jobApplications    JobApplication[]
   mediaUploads       MediaUpload[]
   invitesSent        UserInvite[] @relation("InvitedBy")
+  metaUserAccessToken String?
+  metaUserTokenExpiresAt DateTime?
   inviteAccepted     UserInvite?  @relation("AcceptedInvite")
 }
 

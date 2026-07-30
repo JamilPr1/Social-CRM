@@ -66,16 +66,34 @@ export function AccountsClient({
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => {
-              invalidateAccountsCache();
-              connectMeta(errorCode === "no_pages", false);
-            }}
-            className="flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Connect Meta
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const res = await fetch("/api/meta/sync-pages", { method: "POST" });
+                const data = await res.json();
+                if (res.ok) {
+                  invalidateAccountsCache();
+                  window.location.reload();
+                } else {
+                  alert(data.error || "Failed to sync pages");
+                }
+              }}
+              className="flex items-center gap-2 border border-[var(--border)] hover:bg-[var(--card-hover)] px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            >
+              Refresh pages
+            </button>
+            <button
+              onClick={() => {
+                invalidateAccountsCache();
+                connectMeta(errorCode === "no_pages", false);
+              }}
+              className="flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Connect Meta
+            </button>
+          </div>
         )}
       </div>
 

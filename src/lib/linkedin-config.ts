@@ -30,6 +30,10 @@ export const linkedInEnv = {
   userPhone: process.env.USER_PHONE || "",
   userLinkedInUrl: process.env.USER_LINKEDIN_URL || "",
   userResumePath: process.env.USER_RESUME_PATH || join(process.cwd(), "data", "resume.txt"),
+  organizationIds: (process.env.LINKEDIN_ORGANIZATION_IDS || "")
+    .split(/[\s,]+/)
+    .map((id) => id.trim())
+    .filter(Boolean),
 };
 
 export function getLinkedInScopes() {
