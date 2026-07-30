@@ -30,11 +30,24 @@ export function resolveMetaSubPlatforms(platform: PublishPlatform): MetaSubPlatf
 /** LinkedIn is only included for linkedin-only or explicit all-platforms flows. */
 export function shouldPublishLinkedIn(
   platform: PublishPlatform,
-  includeLinkedIn?: boolean
+  linkedInOptIn?: boolean
 ): boolean {
   if (platform === "linkedin") return true;
-  if (platform === "all") return includeLinkedIn !== false;
+  if (platform === "all") return linkedInOptIn !== false;
   return false;
+}
+
+export function resolvePublishPlan(
+  platform: PublishPlatform,
+  linkedInOptIn?: boolean
+): {
+  metaTargets: MetaSubPlatform[];
+  publishLinkedIn: boolean;
+} {
+  return {
+    metaTargets: resolveMetaSubPlatforms(platform),
+    publishLinkedIn: shouldPublishLinkedIn(platform, linkedInOptIn),
+  };
 }
 
 export type PublishResult = {
@@ -209,14 +222,14 @@ export async function publishToAllPlatforms(
     platform: PublishPlatform;
     imageUrl?: string;
     scheduledAt?: string | null;
-    includeLinkedIn?: boolean;
+    /** User opt-in for LinkedIn when platform is "all". Ignored for other platforms. */
+    linkedInOptIn?: boolean;
   }
 ): Promise<PublishResult[]> {
   const results: PublishResult[] = [];
-  const metaTargets = resolveMetaSubPlatforms(options.platform);
-  const publishLinkedIn = shouldPublishLinkedIn(
+  const { metaTargets, publishLinkedIn } = resolvePublishPlan(
     options.platform,
-    options.includeLinkedIn
+    options.linkedInOptIn
   );
 
   if (metaTargets.length > 0 && options.accountIds.length > 0) {
@@ -300,7 +313,6 @@ export async function publishDueScheduledPosts() {
           message: item.message,
           platform,
           imageUrl: item.imageUrl || undefined,
-          includeLinkedIn: shouldPublishLinkedIn(platform),
         }
       );
 

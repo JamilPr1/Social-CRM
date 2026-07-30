@@ -1,12 +1,12 @@
 import { withAuth, apiError, apiSuccess } from "@/lib/api-helpers";
-import { publishToAllPlatforms, getPostableAccountIds, shouldPublishLinkedIn } from "@/lib/publish";
+import { publishToAllPlatforms, getPostableAccountIds } from "@/lib/publish";
 import { z } from "zod";
 
 const bulkPostSchema = z.object({
   accountIds: z.array(z.string()).optional(),
   postToAll: z.boolean().optional(),
   message: z.string().min(1),
-  platform: z.enum(["facebook", "instagram", "both", "linkedin", "all"]).default("all"),
+  platform: z.enum(["facebook", "instagram", "both", "linkedin", "all"]),
   imageUrl: z.string().url().optional(),
   keywords: z.array(z.string()).optional(),
   includeLinkedIn: z.boolean().optional(),
@@ -35,18 +35,23 @@ export async function POST(request: Request) {
         return apiError("Upload an image — required for Instagram posts");
       }
 
+      const linkedInOptIn =
+        data.platform === "all" ? data.includeLinkedIn : undefined;
+
       const results = await publishToAllPlatforms(user, {
         accountIds,
         message: data.message,
         platform: data.platform,
         imageUrl: data.imageUrl,
-        includeLinkedIn: shouldPublishLinkedIn(data.platform, data.includeLinkedIn),
+        linkedInOptIn,
       });
       const successCount = results.filter((r) => r.success).length;
       return apiSuccess({
         results,
         successCount,
         total: results.length,
+        platform: data.platform,
+        destinations: results.map((r) => `${r.pageName} (${r.platform})`),
       });
     } catch (err) {
       if (err instanceof z.ZodError) return apiError("Invalid input");

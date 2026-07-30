@@ -15,6 +15,10 @@ import { formatDate } from "@/lib/utils";
 import { fetchAccounts } from "@/lib/client-cache";
 import { BoostModal } from "@/components/boost-modal";
 import { PostListItem } from "@/components/post-list-item";
+import {
+  describeInstagramAspectIssue,
+  loadImageDimensions,
+} from "@/lib/instagram-image";
 
 interface MetaAccount {
   id: string;
@@ -322,6 +326,19 @@ export default function PostsPage() {
     }
   }
 
+  const targetsInstagram =
+    platform === "instagram" || platform === "both" || platform === "all";
+
+  async function validateInstagramImage(source: string | File): Promise<string | null> {
+    if (!targetsInstagram) return null;
+    try {
+      const { width, height } = await loadImageDimensions(source);
+      return describeInstagramAspectIssue(width, height);
+    } catch {
+      return null;
+    }
+  }
+
   async function handleImageUpload(file: File) {
     if (!file.type.startsWith("image/")) {
       setError("Please choose an image file (JPEG, PNG, WebP, or GIF)");
@@ -335,6 +352,12 @@ export default function PostsPage() {
     setError("");
     setUploadingImage(true);
     try {
+      const aspectIssue = await validateInstagramImage(file);
+      if (aspectIssue) {
+        setError(aspectIssue);
+        return;
+      }
+
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/uploads/image", { method: "POST", body: formData });
@@ -390,9 +413,16 @@ export default function PostsPage() {
       setError("Upload an image — Instagram requires a photo with every post.");
       return;
     }
+    if (needsImage && imageUrl) {
+      const aspectIssue = await validateInstagramImage(imageUrl);
+      if (aspectIssue) {
+        setError(aspectIssue);
+        return;
+      }
+    }
     setPosting(true);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         postToAll,
         accountIds: postToAll ? undefined : selectedAccountIds,
         message,
@@ -400,11 +430,13 @@ export default function PostsPage() {
         imageUrl: imageUrl || undefined,
         keywords: selectedKeywords,
         publishNow,
-        includeLinkedIn: platform === "all" || platform === "linkedin" ? includeLinkedIn : false,
         scheduledAt: publishNow ? undefined : scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       };
+      if (platform === "all") {
+        payload.includeLinkedIn = includeLinkedIn;
+      }
 
-      const endpoint = publishNow && !scheduledAt ? "/api/posts/bulk" : "/api/posts/scheduled";
+      const endpoint = publishNow ? "/api/posts/bulk" : "/api/posts/scheduled";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -437,7 +469,11 @@ export default function PostsPage() {
             .join(" · ");
           setSuccess(`Published to ${ok} of ${total}. Failed: ${details}`);
         } else {
-          setSuccess(`Published to ${ok} of ${total} page(s).`);
+          const where =
+            data.destinations?.length > 0
+              ? data.destinations.join(", ")
+              : `${ok} destination(s)`;
+          setSuccess(`Published to ${where}.`);
         }
       } else if (publishNow) {
         setSuccess("Post published successfully.");
@@ -633,7 +669,7 @@ export default function PostsPage() {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Platform</label>
+                  <label className="block text-sm font-medium mb-2">Publish to</label>
                   <select
                     value={platform}
                     onChange={(e) => setPlatform(e.target.value as ComposePlatform)}
@@ -730,7 +766,7 @@ export default function PostsPage() {
                 />
                 <p className="text-xs text-[var(--muted)] mt-1.5">
                   {platform === "instagram"
-                    ? "Attached to Instagram only."
+                    ? "Attached to Instagram only. Use 1:1, 4:5 portrait, or up to 1.91:1 landscape."
                     : platform === "facebook"
                       ? "Attached to Facebook only when provided."
                       : platform === "linkedin"
@@ -905,7 +941,8 @@ export default function PostsPage() {
 
       {tab === "published" && (
         <>
-          <div className="mb-6 flex flex-wrap gap-3">
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+            <span className="text-sm text-[var(--muted)]">View posts from</span>
             <select
               value={selectedPlatform}
               onChange={(e) => setSelectedPlatform(e.target.value as PlatformFilter)}

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 const createSchema = z.object({
   accountIds: z.array(z.string()).optional(),
   postToAll: z.boolean().optional(),
-  platform: z.enum(["facebook", "instagram", "both", "linkedin", "all"]).default("all"),
+  platform: z.enum(["facebook", "instagram", "both", "linkedin", "all"]),
   topic: z.string().optional(),
   message: z.string().min(1),
   keywords: z.array(z.string()).optional(),
@@ -47,13 +47,15 @@ export async function POST(request: Request) {
       if (data.postToAll && data.platform !== "linkedin") {
         accountIds = await getPostableAccountIds(user);
       }
-      const includeLinkedIn = shouldPublishLinkedIn(data.platform, data.includeLinkedIn);
+      const linkedInOptIn =
+        data.platform === "all" ? data.includeLinkedIn : undefined;
+      const publishLinkedIn = shouldPublishLinkedIn(data.platform, linkedInOptIn);
       const needsMetaPages = data.platform !== "linkedin";
 
       if (needsMetaPages && data.platform !== "all" && accountIds.length === 0) {
         return apiError("Select at least one page");
       }
-      if (data.platform === "linkedin" && !includeLinkedIn) {
+      if (data.platform === "linkedin" && !publishLinkedIn) {
         return apiError("LinkedIn is not enabled");
       }
 
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
           message: data.message,
           platform: data.platform,
           imageUrl: data.imageUrl,
-          includeLinkedIn,
+          linkedInOptIn,
         });
         const record = await prisma.scheduledPost.create({
           data: {
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
         },
       });
 
-      if (includeLinkedIn && scheduledAt) {
+      if (publishLinkedIn && scheduledAt) {
         await addLinkedInPost(user.id, {
           content: data.message,
           scheduledAt: scheduledAt.toISOString(),
