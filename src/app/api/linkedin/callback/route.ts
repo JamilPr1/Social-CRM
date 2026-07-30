@@ -22,14 +22,16 @@ export async function GET(request: NextRequest) {
 
   const cookieStore = await cookies();
   const savedState = cookieStore.get("linkedin_oauth_state")?.value;
+  const redirectUri = cookieStore.get("linkedin_oauth_redirect")?.value;
   cookieStore.delete("linkedin_oauth_state");
+  cookieStore.delete("linkedin_oauth_redirect");
 
   if (!code || !state || state !== savedState) {
     return NextResponse.redirect(new URL("/accounts?error=invalid_state", request.url));
   }
 
   try {
-    const tokenData = await exchangeLinkedInCode(code);
+    const tokenData = await exchangeLinkedInCode(code, redirectUri);
     const profile = await fetchLinkedInProfile(tokenData.access_token);
     await saveLinkedInConnection(user.id, tokenData, profile || undefined);
     return NextResponse.redirect(new URL("/accounts?connected=linkedin", request.url));

@@ -8,24 +8,26 @@ const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_API = "https://api.linkedin.com/rest";
 
-export function getLinkedInAuthUrl(state: string) {
+export function getLinkedInAuthUrl(state: string, redirectUri?: string) {
+  const uri = redirectUri || linkedInEnv.redirectUri;
   const params = new URLSearchParams({
     response_type: "code",
     client_id: linkedInEnv.clientId,
-    redirect_uri: linkedInEnv.redirectUri,
+    redirect_uri: uri,
     scope: getLinkedInScopes().join(" "),
     state,
   });
   return `${LINKEDIN_AUTH_URL}?${params}`;
 }
 
-export async function exchangeLinkedInCode(code: string) {
+export async function exchangeLinkedInCode(code: string, redirectUri?: string) {
+  const uri = redirectUri || linkedInEnv.redirectUri;
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
     client_id: linkedInEnv.clientId,
     client_secret: linkedInEnv.clientSecret,
-    redirect_uri: linkedInEnv.redirectUri,
+    redirect_uri: uri,
   });
 
   const res = await fetch(LINKEDIN_TOKEN_URL, {

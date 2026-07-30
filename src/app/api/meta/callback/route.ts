@@ -32,14 +32,16 @@ export async function GET(request: NextRequest) {
 
   const cookieStore = await cookies();
   const savedState = cookieStore.get("meta_oauth_state")?.value;
+  const redirectUri = cookieStore.get("meta_oauth_redirect")?.value;
   cookieStore.delete("meta_oauth_state");
+  cookieStore.delete("meta_oauth_redirect");
 
   if (!code || !state || state !== savedState) {
     return NextResponse.redirect(new URL("/accounts?error=invalid_state", request.url));
   }
 
   try {
-    const { access_token: shortToken } = await exchangeCodeForToken(code);
+    const { access_token: shortToken } = await exchangeCodeForToken(code, redirectUri);
     const { access_token: longToken, expires_in } = await getLongLivedToken(shortToken);
     let pages = await getUserPages(longToken);
 

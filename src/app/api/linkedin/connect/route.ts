@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { getSessionUser } from "@/lib/auth";
-import { getLinkedInAuthUrl, exchangeLinkedInCode, fetchLinkedInProfile, saveLinkedInConnection } from "@/lib/linkedin-api";
+import { getLinkedInAuthUrl } from "@/lib/linkedin-api";
 import { isLinkedInConfigured, getLinkedInSetupIssue } from "@/lib/linkedin-config";
+import { getRequestOrigin, getLinkedInRedirectUri } from "@/lib/app-url";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -18,6 +19,8 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const origin = getRequestOrigin(request);
+  const redirectUri = getLinkedInRedirectUri(origin);
   const state = randomBytes(16).toString("hex");
   const cookieStore = await cookies();
   cookieStore.set("linkedin_oauth_state", state, {
@@ -27,6 +30,13 @@ export async function GET(request: NextRequest) {
     maxAge: 600,
     path: "/",
   });
+  cookieStore.set("linkedin_oauth_redirect", redirectUri, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/",
+  });
 
-  return NextResponse.redirect(getLinkedInAuthUrl(state));
+  return NextResponse.redirect(getLinkedInAuthUrl(state, redirectUri));
 }

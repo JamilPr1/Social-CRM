@@ -35,11 +35,11 @@ export interface MetaComment {
 
 export function getMetaOAuthUrl(
   state: string,
-  options?: { reauth?: boolean; standard?: boolean }
+  options?: { reauth?: boolean; standard?: boolean; redirectUri?: string }
 ): string {
   const params = new URLSearchParams({
     client_id: process.env.META_APP_ID!,
-    redirect_uri: getMetaRedirectUri(),
+    redirect_uri: options?.redirectUri || getMetaRedirectUri(),
     state,
     response_type: "code",
   });
@@ -308,11 +308,11 @@ export async function getUserPages(userToken: string): Promise<MetaPage[]> {
   return pages;
 }
 
-export async function exchangeCodeForToken(code: string) {
+export async function exchangeCodeForToken(code: string, redirectUri?: string) {
   const params = new URLSearchParams({
     client_id: process.env.META_APP_ID!,
     client_secret: process.env.META_APP_SECRET!,
-    redirect_uri: getMetaRedirectUri(),
+    redirect_uri: redirectUri || getMetaRedirectUri(),
     code,
   });
   const res = await fetch(`${GRAPH_API}/oauth/access_token?${params}`);
