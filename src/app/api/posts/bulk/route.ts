@@ -27,10 +27,12 @@ export async function POST(request: Request) {
       }
 
       if (
-        (data.platform === "instagram" || data.platform === "both") &&
+        (data.platform === "instagram" ||
+          data.platform === "both" ||
+          data.platform === "all") &&
         !data.imageUrl
       ) {
-        return apiError("Image URL required for Instagram posts");
+        return apiError("Upload an image — required for Instagram posts");
       }
 
       const results = await publishToAllPlatforms(user, {

@@ -62,10 +62,12 @@ export async function POST(request: Request) {
       const publishNow = data.publishNow || !scheduledAt;
 
       if (
-        (data.platform === "instagram" || data.platform === "both") &&
+        (data.platform === "instagram" ||
+          data.platform === "both" ||
+          data.platform === "all") &&
         !data.imageUrl
       ) {
-        return apiError("Image URL required for Instagram posts");
+        return apiError("Upload an image — required for Instagram posts");
       }
 
       if (publishNow) {

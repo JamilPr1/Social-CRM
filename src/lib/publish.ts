@@ -22,7 +22,8 @@ export type PublishResult = {
 export async function publishLinkedInForUser(
   userId: string,
   message: string,
-  scheduledAt?: string | null
+  scheduledAt?: string | null,
+  imageUrl?: string
 ): Promise<PublishResult> {
   const conn = await getLinkedInConnection(userId);
   const pageName = conn?.personName || "LinkedIn";
@@ -53,7 +54,7 @@ export async function publishLinkedInForUser(
       };
     }
 
-    const published = await publishLinkedInPost(userId, post.id);
+    const published = await publishLinkedInPost(userId, post.id, imageUrl);
     return {
       accountId: "linkedin",
       pageName,
@@ -138,7 +139,12 @@ export async function publishToAccounts(
             metaPostId: result.id,
           });
         } else {
-          const result = await createPagePost(account.pageId, token, options.message);
+          const result = await createPagePost(
+            account.pageId,
+            token,
+            options.message,
+            options.imageUrl
+          );
           results.push({
             accountId,
             pageName: account.pageName,
@@ -204,7 +210,12 @@ export async function publishToAllPlatforms(
 
   if (publishLinkedIn) {
     results.push(
-      await publishLinkedInForUser(user.id, options.message, options.scheduledAt)
+      await publishLinkedInForUser(
+        user.id,
+        options.message,
+        options.scheduledAt,
+        options.imageUrl
+      )
     );
   }
 

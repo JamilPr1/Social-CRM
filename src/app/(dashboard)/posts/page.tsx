@@ -96,6 +96,7 @@ export default function PostsPage() {
     personName: null,
   });
   const [imageUrl, setImageUrl] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [postToAll, setPostToAll] = useState(true);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState("");
@@ -180,6 +181,12 @@ export default function PostsPage() {
   }, [postToAll, selectedAccountIds, accounts]);
 
   const hasInstagramOnTargets = targetAccounts.some((a) => a.instagramId);
+
+  const needsImage = useMemo(() => {
+    if (platform === "instagram" || platform === "both") return true;
+    if (platform === "all" && hasInstagramOnTargets) return true;
+    return false;
+  }, [platform, hasInstagramOnTargets]);
 
   const targetCount = useMemo(() => {
     let count = 0;
@@ -285,6 +292,36 @@ export default function PostsPage() {
     }
   }
 
+  async function handleImageUpload(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file (JPEG, PNG, WebP, or GIF)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image must be 5MB or smaller");
+      return;
+    }
+
+    setError("");
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/uploads/image", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Image upload failed");
+        return;
+      }
+      setImageUrl(data.url);
+      setSuccess("Image uploaded — included with your post on all platforms.");
+    } catch {
+      setError("Image upload failed");
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
   async function handleGenerateImage() {
     const imageTopic = topic || message;
     if (!imageTopic.trim()) {
@@ -319,6 +356,10 @@ export default function PostsPage() {
   async function handlePublish(publishNow: boolean) {
     setError("");
     setSuccess("");
+    if (needsImage && !imageUrl) {
+      setError("Upload an image — Instagram requires a photo with every post.");
+      return;
+    }
     setPosting(true);
     try {
       const payload = {
@@ -597,34 +638,66 @@ export default function PostsPage() {
                 </div>
               </div>
 
-              {(platform === "instagram" || platform === "both" || platform === "all") && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium">
-                      Image URL (required for Instagram)
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium">
+                    Post image
+                    {needsImage ? (
+                      <span className="text-red-400 ml-1">*</span>
+                    ) : (
+                      <span className="text-[var(--muted)] font-normal ml-1">(optional)</span>
+                    )}
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        disabled={uploadingImage}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleImageUpload(file);
+                          e.target.value = "";
+                        }}
+                      />
+                      {uploadingImage ? "Uploading..." : "Upload image"}
                     </label>
                     <button
                       type="button"
                       onClick={handleGenerateImage}
-                      disabled={generatingImage || (!topic && !message)}
+                      disabled={generatingImage || uploadingImage || (!topic && !message)}
                       className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline disabled:opacity-50"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      {generatingImage ? "Generating..." : "Generate image (free)"}
+                      {generatingImage ? "Generating..." : "AI image"}
                     </button>
                   </div>
-                  <input
-                    type="url"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
-                    placeholder="https://... or use Generate image"
-                  />
-                  <p className="text-xs text-[var(--muted)] mt-1.5">
-                    AI generates a matching image URL for Instagram posts.
-                  </p>
                 </div>
-              )}
+
+                {imageUrl && (
+                  <div className="mb-3 rounded-lg border border-[var(--border)] overflow-hidden bg-[var(--background)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imageUrl}
+                      alt="Post preview"
+                      className="w-full max-h-64 object-contain"
+                    />
+                  </div>
+                )}
+
+                <input
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg px-4 py-2.5 text-sm"
+                  placeholder="Upload above, generate with AI, or paste image URL"
+                />
+                <p className="text-xs text-[var(--muted)] mt-1.5">
+                  Attached to Facebook, Instagram, and LinkedIn when provided.
+                  {needsImage ? " Required for Instagram." : ""}
+                </p>
+              </div>
 
               <div className="flex flex-wrap gap-3 pt-2">
                 <button

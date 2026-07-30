@@ -38,6 +38,7 @@ export async function middleware(request: NextRequest) {
     publicPaths.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/api/meta/callback") ||
     pathname.startsWith("/api/linkedin/callback") ||
+    pathname.startsWith("/api/media/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
   ) {

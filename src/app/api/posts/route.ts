@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
           data.message
         );
       } else {
-        result = await createPagePost(account.pageId, token, data.message);
+        result = await createPagePost(account.pageId, token, data.message, data.imageUrl);
       }
 
       logActivity(user.id, "CREATE_POST", `Posted to ${data.platform} on ${account.pageName}`);

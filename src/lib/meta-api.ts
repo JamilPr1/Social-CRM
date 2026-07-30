@@ -395,8 +395,26 @@ export async function getPostComments(
 export async function createPagePost(
   pageId: string,
   pageToken: string,
-  message: string
+  message: string,
+  imageUrl?: string
 ) {
+  if (imageUrl) {
+    const res = await fetch(`${GRAPH_API}/${pageId}/photos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: imageUrl,
+        caption: message,
+        access_token: pageToken,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || "Failed to create photo post");
+    }
+    return res.json();
+  }
+
   const res = await fetch(`${GRAPH_API}/${pageId}/feed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

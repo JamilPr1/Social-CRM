@@ -39,6 +39,7 @@ model User {
   linkedInPosts      LinkedInPost[]
   linkedInLeads      LinkedInLead[]
   jobApplications    JobApplication[]
+  mediaUploads       MediaUpload[]
 }
 
 model Session {
@@ -346,4 +347,18 @@ model PipelineSyncLog {
 
   @@index([userId])
   @@index([syncedAt])
+}
+
+model MediaUpload {
+  id        String   @id @default(cuid())
+  userId    String
+  mimeType  String
+  fileName  String?
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }

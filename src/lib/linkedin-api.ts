@@ -201,7 +201,8 @@ export function isValidLinkedInPostUrn(urn: string | null | undefined): urn is s
 export async function createLinkedInPost(
   userId: string,
   content: string,
-  visibility = "PUBLIC"
+  visibility = "PUBLIC",
+  imageUrl?: string
 ) {
   let conn = await getLinkedInConnection(userId);
   if (!conn?.personUrn) {
@@ -218,20 +219,27 @@ export async function createLinkedInPost(
   const author = conn?.personUrn;
   if (!author) throw new Error("Could not determine LinkedIn person URN. Re-authenticate.");
 
+  const postBody: Record<string, unknown> = {
+    author,
+    commentary: content,
+    visibility,
+    distribution: {
+      feedDistribution: "MAIN_FEED",
+      targetEntities: [],
+      thirdPartyDistributionChannels: [],
+    },
+    lifecycleState: "PUBLISHED",
+    isReshareDisabledByAuthor: false,
+  };
+
+  if (imageUrl) {
+    const imageUrn = await uploadLinkedInImageFromUrl(userId, author, imageUrl);
+    postBody.content = { media: { id: imageUrn } };
+  }
+
   const { data, restliId } = await linkedInRawRequest(userId, "/posts", {
     method: "POST",
-    body: JSON.stringify({
-      author,
-      commentary: content,
-      visibility,
-      distribution: {
-        feedDistribution: "MAIN_FEED",
-        targetEntities: [],
-        thirdPartyDistributionChannels: [],
-      },
-      lifecycleState: "PUBLISHED",
-      isReshareDisabledByAuthor: false,
-    }),
+    body: JSON.stringify(postBody),
   });
 
   const id =
@@ -243,6 +251,48 @@ export async function createLinkedInPost(
   }
 
   return { ...(data || {}), id };
+}
+
+async function uploadLinkedInImageFromUrl(
+  userId: string,
+  ownerUrn: string,
+  imageUrl: string
+): Promise<string> {
+  const init = (await linkedInRequest(userId, "/images?action=initializeUpload", {
+    method: "POST",
+    body: JSON.stringify({
+      initializeUploadRequest: { owner: ownerUrn },
+    }),
+  })) as { value?: { uploadUrl?: string; image?: string } };
+
+  const uploadUrl = init?.value?.uploadUrl;
+  const imageUrn = init?.value?.image;
+  if (!uploadUrl || !imageUrn) {
+    throw new Error("LinkedIn image upload initialization failed");
+  }
+
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) {
+    throw new Error("Could not download image for LinkedIn upload");
+  }
+  const bytes = await imgRes.arrayBuffer();
+  const token = await getValidLinkedInAccessToken(userId);
+  if (!token) throw new Error("LinkedIn not authenticated");
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+    },
+    body: bytes,
+  });
+
+  if (!uploadRes.ok) {
+    throw new Error("LinkedIn image upload failed");
+  }
+
+  return imageUrn;
 }
 
 export async function getLinkedInAuthStatus(userId: string) {

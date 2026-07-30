@@ -86,13 +86,13 @@ export async function deleteLinkedInPost(userId: string, id: string) {
   return true;
 }
 
-export async function publishLinkedInPost(userId: string, id: string) {
+export async function publishLinkedInPost(userId: string, id: string, imageUrl?: string) {
   const post = await prisma.linkedInPost.findFirst({ where: { id, userId } });
   if (!post) throw new Error("Post not found");
   if (post.status === "published") throw new Error("Post already published");
 
   try {
-    const result = await createLinkedInPost(userId, post.content, post.visibility);
+    const result = await createLinkedInPost(userId, post.content, post.visibility, imageUrl);
     const urn = result.id;
 
     return prisma.linkedInPost.update({
