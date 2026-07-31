@@ -52,6 +52,12 @@ export function getLinkedInClientSecret(): string {
   return readEnv("LINKEDIN_CLIENT_SECRET");
 }
 
+export function getLinkedInAppLabel(clientId = getLinkedInClientId()): string {
+  if (clientId === "78x7byxctnebwz") return "Arfa CRM Community";
+  if (clientId === "788pjmplr6yaba") return "My Post Scheduler";
+  return "your LinkedIn app";
+}
+
 export function getLinkedInClientCredentials() {
   return {
     clientId: getLinkedInClientId(),
