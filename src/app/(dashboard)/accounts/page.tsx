@@ -15,6 +15,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Your Facebook account does not have access to Business Login for this app. Add your account as App Admin/Tester in Meta Developer Console, or use Basic Login below.",
   invalid_state: "Session expired. Please try connecting again.",
   unauthorized: "You must be logged in as admin to connect accounts.",
+  invalid_scope_error:
+    "LinkedIn rejected the requested permissions. The Arfa CRM Community app can only use login scopes until Community Management API is approved.",
 };
 
 export default async function AccountsPage({
@@ -38,9 +40,11 @@ export default async function AccountsPage({
         params.connected === "linkedin"
           ? params.org_warning === "1" && serverRequestsOrgScopes
             ? "LinkedIn login succeeded, but w_organization_social was not granted. Your LinkedIn Developer app needs Community Management API or Advertising API approved — see the checklist on this page."
-            : params.org_warning === "1"
-              ? "LinkedIn connected, but LINKEDIN_ORGANIZATION_IDS is not loaded on the server. Redeploy Vercel after setting env vars."
-              : "LinkedIn connected successfully!"
+            : params.org_warning === "1" && linkedInOrgIds.length > 0
+              ? "LinkedIn profile connected. Company-page posting will unlock after LinkedIn approves Community Management API — then set LINKEDIN_ORG_SCOPES_READY=true on Vercel and reconnect."
+              : params.org_warning === "1"
+                ? "LinkedIn connected, but LINKEDIN_ORGANIZATION_IDS is not loaded on the server. Redeploy Vercel after setting env vars."
+                : "LinkedIn connected successfully!"
           : "Account connected successfully!",
     };
   } else if (params.error) {

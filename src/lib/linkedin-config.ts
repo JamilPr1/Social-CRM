@@ -111,15 +111,18 @@ export function isLinkedInOrgScopesReady() {
 }
 
 export function getLinkedInScopes() {
-  const base = ["openid", "profile", "email", "w_member_social"];
-  const orgScopes = shouldRequestLinkedInOrgScopes()
-    ? ["w_organization_social", "r_organization_social"]
-    : [];
+  // Arfa CRM Community is CMA-only until approved — w_member_social needs Share on LinkedIn or approved CMA.
+  const base = ["openid", "profile", "email"];
+  const postingScopes = isLinkedInOrgScopesReady()
+    ? ["w_member_social", "w_organization_social", "r_organization_social"]
+    : isTruthyEnv("LINKEDIN_INCLUDE_MEMBER_SCOPE")
+      ? ["w_member_social"]
+      : [];
   const extra = linkedInEnv.extraScopes
     .split(/[\s,]+/)
     .map((s) => s.trim())
     .filter(Boolean);
-  return [...new Set([...base, ...extra])];
+  return [...new Set([...base, ...postingScopes, ...extra])];
 }
 
 export function isLinkedInConfigured() {

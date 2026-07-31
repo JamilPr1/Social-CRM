@@ -317,8 +317,8 @@ function scopesFromTokenData(tokenData: { scope?: string }): string[] {
   if (tokenData.scope) {
     return tokenData.scope.split(/\s+/).filter(Boolean);
   }
-  // LinkedIn often omits scope in token response — never assume org scopes were granted.
-  return ["openid", "profile", "email", "w_member_social"];
+  // LinkedIn often omits scope in token response — never assume posting scopes were granted.
+  return ["openid", "profile", "email"];
 }
 
 export async function fetchLinkedInProfile(accessToken: string) {

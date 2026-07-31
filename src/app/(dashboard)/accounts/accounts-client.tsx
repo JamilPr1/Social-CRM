@@ -219,7 +219,10 @@ export function AccountsClient({
             ? serverRuntimeConfig.linkedInOrganizationIds.join(", ")
             : "none (set LINKEDIN_ORGANIZATION_IDS=102438302 on Vercel and redeploy)"}
           {serverRuntimeConfig?.serverRequestsOrgScopes === false && (
-            <span className="text-red-400"> — org scopes not enabled on server</span>
+            <span className="text-yellow-400/90">
+              {" "}
+              · Posting scopes deferred until LinkedIn approves Community Management API
+            </span>
           )}
         </p>
       </div>

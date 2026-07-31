@@ -31,6 +31,9 @@ yarn-error.log*
 # env files
 .env
 .env*.local
+vercel.env
+vercel.production.env
+vercel.missing-only.env
 
 # secrets & local data
 /credentials/
