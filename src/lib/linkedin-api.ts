@@ -244,7 +244,7 @@ export async function resolveLinkedInOrgCapabilities(userId: string) {
   };
 }
 
-export function getLinkedInAuthUrl(state: string, redirectUri?: string) {
+export function getLinkedInAuthUrl(state: string, redirectUri?: string, forceConsent = false) {
   const uri = redirectUri || linkedInEnv.redirectUri;
   const params = new URLSearchParams({
     response_type: "code",
@@ -253,6 +253,9 @@ export function getLinkedInAuthUrl(state: string, redirectUri?: string) {
     scope: getLinkedInScopes().join(" "),
     state,
   });
+  if (forceConsent) {
+    params.set("prompt", "consent");
+  }
   return `${LINKEDIN_AUTH_URL}?${params}`;
 }
 
@@ -619,6 +622,7 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
       : null,
     grantedScopes: grantedScopeList,
     requestedScopes: getLinkedInScopes(),
+    serverRequestsOrgScopes: shouldRequestLinkedInOrgScopes(),
     publishTargetCount: publishTargets.length,
   };
 }

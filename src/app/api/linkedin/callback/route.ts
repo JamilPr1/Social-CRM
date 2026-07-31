@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
   const redirectUri = cookieStore.get("linkedin_oauth_redirect")?.value;
   cookieStore.delete("linkedin_oauth_state");
   cookieStore.delete("linkedin_oauth_redirect");
+  cookieStore.delete("linkedin_force_consent");
 
   if (!code || !state || state !== savedState) {
     return NextResponse.redirect(new URL("/accounts?error=invalid_state", request.url));

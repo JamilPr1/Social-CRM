@@ -28,6 +28,7 @@ export function AccountsClient({
     publishTargetCount: number;
     grantedScopes: string[];
     requestedScopes: string[];
+    serverRequestsOrgScopes: boolean;
   }>({
     authenticated: false,
     shared: false,
@@ -39,6 +40,7 @@ export function AccountsClient({
     publishTargetCount: 0,
     grantedScopes: [],
     requestedScopes: [],
+    serverRequestsOrgScopes: false,
   });
 
   useEffect(() => {
@@ -56,6 +58,9 @@ export function AccountsClient({
           publishTargetCount: d.auth?.publishTargetCount ?? 0,
           grantedScopes: d.auth?.grantedScopes || [],
           requestedScopes: d.auth?.requestedScopes || d.config?.linkedin?.requestedScopes || [],
+          serverRequestsOrgScopes: Boolean(
+            d.auth?.serverRequestsOrgScopes ?? d.config?.linkedin?.requestsOrgScopes
+          ),
         })
       );
   }, []);
@@ -83,6 +88,7 @@ export function AccountsClient({
       publishTargetCount: 0,
       grantedScopes: [],
       requestedScopes: [],
+      serverRequestsOrgScopes: false,
     });
   }
 
@@ -270,12 +276,38 @@ export function AccountsClient({
                   <p className="font-medium text-yellow-300">
                     Company page posting not enabled yet
                   </p>
+                  {!linkedIn.serverRequestsOrgScopes && (
+                    <p className="text-red-300 font-medium">
+                      Server is not requesting company-page scopes. Add{" "}
+                      <code className="text-[var(--primary)]">LINKEDIN_ORGANIZATION_IDS=102438302</code>{" "}
+                      on Vercel, redeploy, then reconnect below.
+                    </p>
+                  )}
                   <p className="text-[var(--muted)]">
-                    Your profile works, but LinkedIn did not grant{" "}
-                    <code className="text-[var(--primary)]">w_organization_social</code> to your
-                    app. This is approved in LinkedIn Developer Portal — not in the CRM.
+                    LinkedIn only shows a login screen when your app is already authorized with
+                    old permissions. You must revoke the app first, then reconnect so LinkedIn can
+                    grant <code className="text-[var(--primary)]">w_organization_social</code>.
                   </p>
                   <ol className="list-decimal list-inside space-y-2 text-[var(--muted)]">
+                    <li>
+                      Revoke this app at{" "}
+                      <a
+                        href="https://www.linkedin.com/psettings/permitted-services"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#0a66c2] hover:underline"
+                      >
+                        LinkedIn → Permitted services
+                      </a>{" "}
+                      (remove <strong>My Post Scheduler</strong>)
+                    </li>
+                    <li>
+                      On Vercel, confirm{" "}
+                      <code className="text-[var(--primary)]">
+                        LINKEDIN_ORGANIZATION_IDS=102438302
+                      </code>{" "}
+                      and redeploy
+                    </li>
                     <li>
                       Open{" "}
                       <a
@@ -286,51 +318,33 @@ export function AccountsClient({
                       >
                         LinkedIn Developer Portal
                       </a>{" "}
-                      → your app (ID 788pjmplr6yaba)
+                      → your app → Products: Community Management API or Advertising API approved
                     </li>
                     <li>
-                      <strong>Products</strong> → add <strong>Community Management API</strong>{" "}
-                      (or Advertising API) and submit the access request form
+                      Settings → Associated page → link <strong>Arfa Developers</strong>
                     </li>
                     <li>
-                      Link the app to your <strong>Arfa Developers</strong> company page (Settings →
-                      Associated page)
-                    </li>
-                    <li>
-                      <strong>Auth</strong> → confirm redirect URL:{" "}
-                      <code className="text-xs break-all text-[var(--primary)]">
-                        https://social-crm-five.vercel.app/api/social/linkedin/callback
-                      </code>
-                    </li>
-                    <li>
-                      On Vercel, set{" "}
-                      <code className="text-[var(--primary)]">
-                        LINKEDIN_ORGANIZATION_IDS=102438302
-                      </code>{" "}
-                      → redeploy → <strong>Reconnect</strong> LinkedIn here
+                      Click <strong>Reconnect for company pages</strong> below (forces a fresh
+                      permission screen)
                     </li>
                   </ol>
                   <p className="text-xs text-[var(--muted)]">
-                    Granted scopes:{" "}
+                    Requested by server:{" "}
+                    {linkedIn.requestedScopes.length > 0
+                      ? linkedIn.requestedScopes.join(", ")
+                      : "loading…"}
+                    {!linkedIn.requestedScopes.includes("w_organization_social") && (
+                      <span className="text-red-400"> — w_organization_social not requested</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    Granted by LinkedIn:{" "}
                     {linkedIn.grantedScopes.length > 0
                       ? linkedIn.grantedScopes.join(", ")
                       : "none recorded"}
                     {!linkedIn.grantedScopes.includes("w_organization_social") && (
                       <span className="text-yellow-400"> — missing w_organization_social</span>
                     )}
-                  </p>
-                  <p className="text-xs text-[var(--muted)]">
-                    Until LinkedIn approves company-page access, posts will go to your profile only.
-                    See{" "}
-                    <a
-                      href="https://learn.microsoft.com/en-us/linkedin/marketing/community-management/community-management-overview"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#0a66c2] hover:underline"
-                    >
-                      LinkedIn Community Management API docs
-                    </a>
-                    .
                   </p>
                 </div>
               )}
@@ -350,12 +364,16 @@ export function AccountsClient({
                 </div>
               )}
               {isAdmin && !linkedIn.shared && (
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                   <a
-                    href="/api/linkedin/connect"
+                    href={
+                      linkedIn.needsOrgReconnect
+                        ? "/api/linkedin/connect?consent=1"
+                        : "/api/linkedin/connect"
+                    }
                     className="text-sm px-4 py-2 rounded-lg border border-[#0a66c2] text-[#0a66c2] hover:bg-[#0a66c2]/10"
                   >
-                    Reconnect
+                    {linkedIn.needsOrgReconnect ? "Reconnect for company pages" : "Reconnect"}
                   </a>
                   <button
                     onClick={disconnectLinkedIn}
