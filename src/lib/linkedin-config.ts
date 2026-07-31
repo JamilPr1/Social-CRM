@@ -118,11 +118,33 @@ export function getLinkedInScopes() {
     : isTruthyEnv("LINKEDIN_INCLUDE_MEMBER_SCOPE")
       ? ["w_member_social"]
       : [];
-  const extra = linkedInEnv.extraScopes
+  const extra = readEnv("LINKEDIN_EXTRA_SCOPES")
     .split(/[\s,]+/)
     .map((s) => s.trim())
     .filter(Boolean);
   return [...new Set([...base, ...postingScopes, ...extra])];
+}
+
+export function getLinkedInOAuthDebugInfo() {
+  const extraScopesRaw = readEnv("LINKEDIN_EXTRA_SCOPES");
+  return {
+    clientIdSuffix: getLinkedInClientId().slice(-4),
+    clientIdMatchesNewApp: getLinkedInClientId() === "78x7byxctnebwz",
+    requestedScopes: getLinkedInScopes(),
+    orgScopesReady: isLinkedInOrgScopesReady(),
+    includeMemberScope: isTruthyEnv("LINKEDIN_INCLUDE_MEMBER_SCOPE"),
+    extraScopesConfigured: extraScopesRaw.length > 0,
+    extraScopes: extraScopesRaw
+      ? extraScopesRaw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
+      : [],
+    redirectUri:
+      readEnv("LINKEDIN_REDIRECT_URI") ||
+      "https://social-crm-five.vercel.app/api/social/linkedin/callback",
+    requiredLinkedInProducts: [
+      "Sign In with LinkedIn using OpenID Connect (required now for openid/profile/email)",
+      "Community Management API (required later for company-page posting)",
+    ],
+  };
 }
 
 export function isLinkedInConfigured() {

@@ -453,6 +453,33 @@ export function AccountsClient({
               </p>
               {isAdmin && (
                 <>
+                  {errorCode === "invalid_scope_error" && (
+                    <div className="mb-4 mx-auto max-w-md p-4 rounded-lg border border-red-500/40 bg-red-500/10 text-sm text-left space-y-2">
+                      <p className="font-medium text-red-300">Fix in LinkedIn Developer Portal</p>
+                      <ol className="list-decimal list-inside space-y-1 text-[var(--muted)]">
+                        <li>
+                          Open{" "}
+                          <a
+                            href="https://www.linkedin.com/developers/apps/78x7byxctnebwz/products"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#0a66c2] hover:underline"
+                          >
+                            Arfa CRM Community → Products
+                          </a>
+                        </li>
+                        <li>
+                          Add <strong>Sign In with LinkedIn using OpenID Connect</strong> (approves
+                          instantly)
+                        </li>
+                        <li>
+                          On Vercel, make sure <code>LINKEDIN_ORG_SCOPES_READY</code> is{" "}
+                          <strong>not</strong> set yet
+                        </li>
+                        <li>Redeploy if you changed env, then click Connect LinkedIn again</li>
+                      </ol>
+                    </div>
+                  )}
                   <a
                     href="/api/linkedin/connect"
                     className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm bg-[#0a66c2] text-white"

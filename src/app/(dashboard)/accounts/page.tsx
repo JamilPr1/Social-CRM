@@ -16,7 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_state: "Session expired. Please try connecting again.",
   unauthorized: "You must be logged in as admin to connect accounts.",
   invalid_scope_error:
-    "LinkedIn rejected the requested permissions. The Arfa CRM Community app can only use login scopes until Community Management API is approved.",
+    "LinkedIn rejected the requested permissions. In your Arfa CRM Community app, open Products and add Sign In with LinkedIn using OpenID Connect (instant). Also confirm LINKEDIN_ORG_SCOPES_READY is not set on Vercel yet.",
 };
 
 export default async function AccountsPage({

@@ -1,5 +1,5 @@
 import { withAuth, apiSuccess, apiError } from "@/lib/api-helpers";
-import { getLinkedInCredentialsStatus } from "@/lib/linkedin-config";
+import { getLinkedInCredentialsStatus, getLinkedInOAuthDebugInfo } from "@/lib/linkedin-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -10,6 +10,9 @@ export async function GET() {
     if (user.role !== "ADMIN") {
       return apiError("Admin only", 403);
     }
-    return apiSuccess(getLinkedInCredentialsStatus());
+    return apiSuccess({
+      ...getLinkedInCredentialsStatus(),
+      ...getLinkedInOAuthDebugInfo(),
+    });
   });
 }
