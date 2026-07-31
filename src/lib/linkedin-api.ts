@@ -618,6 +618,7 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
       ? linkedInOrgReconnectMessage(orgCaps.missingFromToken)
       : null,
     grantedScopes: grantedScopeList,
+    requestedScopes: getLinkedInScopes(),
     publishTargetCount: publishTargets.length,
   };
 }

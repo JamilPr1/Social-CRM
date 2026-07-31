@@ -105,11 +105,15 @@ export function getGoogleSheetsSetupIssue() {
 }
 
 export function getLinkedInConfigStatus() {
+  const requestedScopes = getLinkedInScopes();
   return {
     linkedin: {
       configured: isLinkedInConfigured(),
       issue: getLinkedInSetupIssue(),
       redirectUri: linkedInEnv.redirectUri,
+      organizationIds: linkedInEnv.organizationIds,
+      requestsOrgScopes: shouldRequestLinkedInOrgScopes(),
+      requestedScopes,
     },
     openai: { configured: isAnyAiConfigured() },
     ai: getAiConfigStatus(),    notion: { configured: isNotionConfigured() },

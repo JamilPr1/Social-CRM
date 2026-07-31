@@ -26,6 +26,8 @@ export function AccountsClient({
     needsOrgReconnect: boolean;
     orgReconnectMessage: string | null;
     publishTargetCount: number;
+    grantedScopes: string[];
+    requestedScopes: string[];
   }>({
     authenticated: false,
     shared: false,
@@ -35,6 +37,8 @@ export function AccountsClient({
     needsOrgReconnect: false,
     orgReconnectMessage: null,
     publishTargetCount: 0,
+    grantedScopes: [],
+    requestedScopes: [],
   });
 
   useEffect(() => {
@@ -50,6 +54,8 @@ export function AccountsClient({
           needsOrgReconnect: Boolean(d.auth?.needsOrgReconnect),
           orgReconnectMessage: d.auth?.orgReconnectMessage || null,
           publishTargetCount: d.auth?.publishTargetCount ?? 0,
+          grantedScopes: d.auth?.grantedScopes || [],
+          requestedScopes: d.auth?.requestedScopes || d.config?.linkedin?.requestedScopes || [],
         })
       );
   }, []);
@@ -75,6 +81,8 @@ export function AccountsClient({
       needsOrgReconnect: false,
       orgReconnectMessage: null,
       publishTargetCount: 0,
+      grantedScopes: [],
+      requestedScopes: [],
     });
   }
 
@@ -257,12 +265,72 @@ export function AccountsClient({
                   {linkedIn.shared ? "Connected by admin · shared with team" : "Connected"}
                 </p>
               </div>
-              {linkedIn.needsOrgReconnect && (
-                <div className="p-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-sm">
-                  <p className="font-medium text-yellow-300">Company page posting needs reconnect</p>
-                  <p className="text-[var(--muted)] mt-1">
-                    {linkedIn.orgReconnectMessage ||
-                      "Click Reconnect below and approve organization permissions for Arfa Developers."}
+              {linkedIn.needsOrgReconnect && isAdmin && (
+                <div className="p-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-sm space-y-3">
+                  <p className="font-medium text-yellow-300">
+                    Company page posting not enabled yet
+                  </p>
+                  <p className="text-[var(--muted)]">
+                    Your profile works, but LinkedIn did not grant{" "}
+                    <code className="text-[var(--primary)]">w_organization_social</code> to your
+                    app. This is approved in LinkedIn Developer Portal — not in the CRM.
+                  </p>
+                  <ol className="list-decimal list-inside space-y-2 text-[var(--muted)]">
+                    <li>
+                      Open{" "}
+                      <a
+                        href="https://www.linkedin.com/developers/apps"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#0a66c2] hover:underline"
+                      >
+                        LinkedIn Developer Portal
+                      </a>{" "}
+                      → your app (ID 788pjmplr6yaba)
+                    </li>
+                    <li>
+                      <strong>Products</strong> → add <strong>Community Management API</strong>{" "}
+                      (or Advertising API) and submit the access request form
+                    </li>
+                    <li>
+                      Link the app to your <strong>Arfa Developers</strong> company page (Settings →
+                      Associated page)
+                    </li>
+                    <li>
+                      <strong>Auth</strong> → confirm redirect URL:{" "}
+                      <code className="text-xs break-all text-[var(--primary)]">
+                        https://social-crm-five.vercel.app/api/social/linkedin/callback
+                      </code>
+                    </li>
+                    <li>
+                      On Vercel, set{" "}
+                      <code className="text-[var(--primary)]">
+                        LINKEDIN_ORGANIZATION_IDS=102438302
+                      </code>{" "}
+                      → redeploy → <strong>Reconnect</strong> LinkedIn here
+                    </li>
+                  </ol>
+                  <p className="text-xs text-[var(--muted)]">
+                    Granted scopes:{" "}
+                    {linkedIn.grantedScopes.length > 0
+                      ? linkedIn.grantedScopes.join(", ")
+                      : "none recorded"}
+                    {!linkedIn.grantedScopes.includes("w_organization_social") && (
+                      <span className="text-yellow-400"> — missing w_organization_social</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-[var(--muted)]">
+                    Until LinkedIn approves company-page access, posts will go to your profile only.
+                    See{" "}
+                    <a
+                      href="https://learn.microsoft.com/en-us/linkedin/marketing/community-management/community-management-overview"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0a66c2] hover:underline"
+                    >
+                      LinkedIn Community Management API docs
+                    </a>
+                    .
                   </p>
                 </div>
               )}
