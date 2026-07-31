@@ -44,6 +44,41 @@ function isTruthyEnv(name: string): boolean {
   return value === "true" || value === "1" || value === "yes";
 }
 
+export function getLinkedInClientId(): string {
+  return readEnv("LINKEDIN_CLIENT_ID");
+}
+
+export function getLinkedInClientSecret(): string {
+  return readEnv("LINKEDIN_CLIENT_SECRET");
+}
+
+export function getLinkedInClientCredentials() {
+  return {
+    clientId: getLinkedInClientId(),
+    clientSecret: getLinkedInClientSecret(),
+  };
+}
+
+export function getLinkedInCredentialsStatus() {
+  const { clientId, clientSecret } = getLinkedInClientCredentials();
+  const looksLikePlaceholder =
+    isPlaceholder(clientSecret) ||
+    clientSecret.includes("PASTE_") ||
+    clientSecret.toLowerCase().includes("your_");
+  return {
+    clientId,
+    clientIdSuffix: clientId.length >= 4 ? clientId.slice(-4) : clientId,
+    secretConfigured: clientSecret.length > 8 && !looksLikePlaceholder,
+    secretLength: clientSecret.length,
+    looksLikePlaceholder,
+    expectedNewAppClientId: "78x7byxctnebwz",
+    clientIdMatchesNewApp: clientId === "78x7byxctnebwz",
+    redirectUri:
+      readEnv("LINKEDIN_REDIRECT_URI") ||
+      "https://social-crm-five.vercel.app/api/social/linkedin/callback",
+  };
+}
+
 export function getLinkedInOrganizationIds(): string[] {
   const raw =
     readEnv("LINKEDIN_ORGANIZATION_IDS") ||
@@ -72,20 +107,25 @@ export function getLinkedInScopes() {
 }
 
 export function isLinkedInConfigured() {
+  const clientId = getLinkedInClientId();
+  const clientSecret = getLinkedInClientSecret();
   return Boolean(
-    linkedInEnv.clientId &&
-      linkedInEnv.clientSecret &&
-      !isPlaceholder(linkedInEnv.clientId) &&
-      !isPlaceholder(linkedInEnv.clientSecret)
+    clientId &&
+      clientSecret &&
+      !isPlaceholder(clientId) &&
+      !isPlaceholder(clientSecret) &&
+      !clientSecret.includes("PASTE_")
   );
 }
 
 export function getLinkedInSetupIssue() {
-  if (!linkedInEnv.clientId || isPlaceholder(linkedInEnv.clientId)) {
+  const clientId = getLinkedInClientId();
+  const clientSecret = getLinkedInClientSecret();
+  if (!clientId || isPlaceholder(clientId)) {
     return "LINKEDIN_CLIENT_ID is missing in .env";
   }
-  if (!linkedInEnv.clientSecret || isPlaceholder(linkedInEnv.clientSecret)) {
-    return "LINKEDIN_CLIENT_SECRET is missing in .env";
+  if (!clientSecret || isPlaceholder(clientSecret) || clientSecret.includes("PASTE_")) {
+    return "LINKEDIN_CLIENT_SECRET is missing or invalid on the server";
   }
   return null;
 }

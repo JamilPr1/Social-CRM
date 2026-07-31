@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "./prisma";
 import { encryptToken, decryptToken } from "./encryption";
-import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes, getLinkedInOrganizationIds } from "./linkedin-config";
+import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes, getLinkedInOrganizationIds, getLinkedInClientCredentials } from "./linkedin-config";
 
 const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -250,10 +250,11 @@ export async function resolveLinkedInOrgCapabilities(userId: string) {
 }
 
 export function getLinkedInAuthUrl(state: string, redirectUri?: string, forceConsent = false) {
+  const { clientId } = getLinkedInClientCredentials();
   const uri = redirectUri || linkedInEnv.redirectUri;
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: linkedInEnv.clientId,
+    client_id: clientId,
     redirect_uri: uri,
     scope: getLinkedInScopes().join(" "),
     state,
@@ -266,22 +267,39 @@ export function getLinkedInAuthUrl(state: string, redirectUri?: string, forceCon
 
 export async function exchangeLinkedInCode(code: string, redirectUri?: string) {
   const uri = redirectUri || linkedInEnv.redirectUri;
+  const { clientId, clientSecret } = getLinkedInClientCredentials();
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "LINKEDIN_CLIENT_ID or LINKEDIN_CLIENT_SECRET is missing on the server. Update Vercel env and redeploy."
+    );
+  }
+
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    client_id: linkedInEnv.clientId,
-    client_secret: linkedInEnv.clientSecret,
+    client_id: clientId,
+    client_secret: clientSecret,
     redirect_uri: uri,
   });
 
   const res = await fetch(LINKEDIN_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+    },
     body,
   });
 
   if (!res.ok) {
-    throw new Error(`Token exchange failed: ${await res.text()}`);
+    const detail = await res.text();
+    if (detail.includes("invalid_client")) {
+      throw new Error(
+        `Token exchange failed: invalid_client — LINKEDIN_CLIENT_SECRET does not match LINKEDIN_CLIENT_ID (${clientId}). In Vercel, edit both from Arfa CRM Community → Auth, then redeploy.`
+      );
+    }
+    throw new Error(`Token exchange failed: ${detail}`);
   }
 
   return res.json() as Promise<{
@@ -377,11 +395,12 @@ export async function resolveLinkedInOwnerId(actingUserId: string): Promise<stri
 }
 
 async function refreshLinkedInToken(userId: string, refreshToken: string) {
+  const { clientId, clientSecret } = getLinkedInClientCredentials();
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-    client_id: linkedInEnv.clientId,
-    client_secret: linkedInEnv.clientSecret,
+    client_id: clientId,
+    client_secret: clientSecret,
   });
 
   const res = await fetch(LINKEDIN_TOKEN_URL, {
