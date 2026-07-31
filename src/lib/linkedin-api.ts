@@ -8,6 +8,57 @@ const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_API = "https://api.linkedin.com/rest";
 
+function normalizeScopeList(scopes: string[]): string[] {
+  return [
+    ...new Set(
+      scopes
+        .flatMap((scope) => scope.split(/[\s,]+/))
+        .map((scope) => scope.trim())
+        .filter(Boolean)
+    ),
+  ];
+}
+
+export function parseGrantedScopes(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return normalizeScopeList(parsed.map(String));
+  } catch {
+    return [];
+  }
+}
+
+async function persistGrantedScopes(userId: string, scopes: string[]) {
+  const normalized = normalizeScopeList(scopes);
+  await prisma.linkedInConnection.update({
+    where: { userId },
+    data: { grantedScopes: JSON.stringify(normalized) },
+  });
+  return normalized;
+}
+
+export async function ensureGrantedScopesNormalized(userId: string) {
+  const conn = await getLinkedInConnection(userId);
+  if (!conn?.grantedScopes) return [];
+  const normalized = parseGrantedScopes(conn.grantedScopes);
+  const rawParsed = (() => {
+    try {
+      return JSON.parse(conn.grantedScopes) as string[];
+    } catch {
+      return [];
+    }
+  })();
+  if (
+    normalized.length !== rawParsed.length ||
+    normalized.some((scope, index) => scope !== String(rawParsed[index]))
+  ) {
+    await persistGrantedScopes(userId, normalized);
+  }
+  return normalized;
+}
+
 export type LinkedInManagedOrg = { id: string; urn: string; name: string };
 
 const LINKEDIN_POST_ROLES = new Set([
@@ -169,13 +220,7 @@ export async function getLinkedInPublishTargets(userId: string) {
 export function connectionHasMemberScopes(
   conn: { grantedScopes?: string | null } | null
 ): boolean {
-  if (!conn?.grantedScopes) return false;
-  try {
-    const scopes = JSON.parse(conn.grantedScopes) as string[];
-    return scopes.includes("w_member_social");
-  } catch {
-    return false;
-  }
+  return parseGrantedScopes(conn?.grantedScopes).includes("w_member_social");
 }
 
 export function linkedInMemberReconnectMessage() {
@@ -185,13 +230,7 @@ export function linkedInMemberReconnectMessage() {
 export function connectionHasOrgScopes(
   conn: { grantedScopes?: string | null } | null
 ): boolean {
-  if (!conn?.grantedScopes) return false;
-  try {
-    const scopes = JSON.parse(conn.grantedScopes) as string[];
-    return scopes.includes("w_organization_social");
-  } catch {
-    return false;
-  }
+  return parseGrantedScopes(conn?.grantedScopes).includes("w_organization_social");
 }
 
 export function linkedInNeedsOrgReconnect(
@@ -225,12 +264,7 @@ export async function probeLinkedInOrgPostingEnabled(userId: string): Promise<bo
     });
 
     const scopes = new Set(scopesFromTokenData({ scope: undefined }));
-    try {
-      const existing = conn.grantedScopes ? (JSON.parse(conn.grantedScopes) as string[]) : [];
-      for (const s of existing) scopes.add(s);
-    } catch {
-      /* ignore */
-    }
+    for (const scope of parseGrantedScopes(conn.grantedScopes)) scopes.add(scope);
     scopes.add("w_organization_social");
     scopes.add("r_organization_social");
 
@@ -332,7 +366,7 @@ export async function exchangeLinkedInCode(code: string, redirectUri?: string) {
 
 function scopesFromTokenData(tokenData: { scope?: string }): string[] {
   if (tokenData.scope) {
-    return tokenData.scope.split(/\s+/).filter(Boolean);
+    return normalizeScopeList([tokenData.scope]);
   }
   // LinkedIn often omits scope in token response — never assume posting scopes were granted.
   return ["openid", "profile", "email"];
@@ -360,7 +394,16 @@ export async function saveLinkedInConnection(
     ? new Date(Date.now() + tokenData.expires_in * 1000)
     : null;
   const personUrn = profile?.personUrn || (profile?.sub ? `urn:li:person:${profile.sub}` : null);
-  const grantedScopes = JSON.stringify(scopesFromTokenData(tokenData));
+  const existing = await getLinkedInConnection(userId);
+  let scopes: string[];
+  if (tokenData.scope) {
+    scopes = scopesFromTokenData(tokenData);
+  } else if (existing?.grantedScopes) {
+    scopes = parseGrantedScopes(existing.grantedScopes);
+  } else {
+    scopes = getLinkedInScopes();
+  }
+  const grantedScopes = JSON.stringify(normalizeScopeList(scopes));
 
   return prisma.linkedInConnection.upsert({
     where: { userId },
@@ -647,13 +690,9 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
   const organizations = parseManagedOrganizations(conn?.managedOrganizations);
   const orgCaps = await resolveLinkedInOrgCapabilities(ownerId);
   const publishTargets = await getLinkedInPublishTargets(ownerId);
-  const grantedScopeList = (() => {
-    try {
-      return conn?.grantedScopes ? (JSON.parse(conn.grantedScopes) as string[]) : [];
-    } catch {
-      return [];
-    }
-  })();
+  const grantedScopeList = conn
+    ? await ensureGrantedScopesNormalized(ownerId)
+    : [];
 
   let profile: { name?: string; email?: string } | null = null;
   if (authenticated) {
