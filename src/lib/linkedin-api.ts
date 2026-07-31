@@ -241,10 +241,13 @@ export async function resolveLinkedInOrgCapabilities(userId: string) {
   const hasKnownOrg =
     configuredOrgIds.length > 0 ||
     parseManagedOrganizations(conn?.managedOrganizations).length > 0;
+  const awaitingApiApproval =
+    configuredOrgIds.length > 0 && !wantsOrg && !canPostToOrg;
   return {
     canPostToOrg,
     needsReconnect: wantsOrg && !canPostToOrg,
-    needsServerConfig: !wantsOrg && hasKnownOrg && !canPostToOrg,
+    needsServerConfig: configuredOrgIds.length === 0 && hasKnownOrg && !canPostToOrg,
+    awaitingApiApproval,
     missingFromToken,
   };
 }
@@ -260,7 +263,7 @@ export function getLinkedInAuthUrl(state: string, redirectUri?: string, forceCon
     state,
   });
   if (forceConsent) {
-    params.set("prompt", "consent");
+    // LinkedIn does not support OAuth prompt=consent reliably — revoke app access instead.
   }
   return `${LINKEDIN_AUTH_URL}?${params}`;
 }
@@ -643,11 +646,14 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
     orgPostingEnabled: orgCaps.canPostToOrg,
     needsOrgReconnect: orgCaps.needsReconnect,
     needsServerConfig: orgCaps.needsServerConfig,
+    awaitingApiApproval: orgCaps.awaitingApiApproval,
     orgReconnectMessage: orgCaps.needsReconnect
       ? linkedInOrgReconnectMessage(orgCaps.missingFromToken)
       : orgCaps.needsServerConfig
         ? "LINKEDIN_ORGANIZATION_IDS is not loaded on the server. Add it in Vercel (Production), redeploy, then reconnect LinkedIn."
-        : null,
+        : orgCaps.awaitingApiApproval
+          ? "Waiting for LinkedIn Community Management API approval. Connect your profile now; set LINKEDIN_ORG_SCOPES_READY=true on Vercel after approval, then reconnect for company pages."
+          : null,
     grantedScopes: grantedScopeList,
     requestedScopes: getLinkedInScopes(),
     serverRequestsOrgScopes: shouldRequestLinkedInOrgScopes(),

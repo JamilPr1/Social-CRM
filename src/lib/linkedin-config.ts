@@ -76,6 +76,9 @@ export function getLinkedInCredentialsStatus() {
     redirectUri:
       readEnv("LINKEDIN_REDIRECT_URI") ||
       "https://social-crm-five.vercel.app/api/social/linkedin/callback",
+    organizationIds: getLinkedInOrganizationIds(),
+    orgScopesReady: isLinkedInOrgScopesReady(),
+    requestsOrgScopes: shouldRequestLinkedInOrgScopes(),
   };
 }
 
@@ -90,8 +93,21 @@ export function getLinkedInOrganizationIds(): string[] {
     .filter(Boolean);
 }
 
+/** Org page IDs for publishing config (does not imply OAuth org scopes are approved). */
+export function hasLinkedInOrganizationConfigured() {
+  return getLinkedInOrganizationIds().length > 0;
+}
+
+/**
+ * Request w_organization_social in OAuth only when LinkedIn has approved Community Management API.
+ * Set LINKEDIN_ORG_SCOPES_READY=true on Vercel after approval — until then profile-only connect works.
+ */
 export function shouldRequestLinkedInOrgScopes() {
-  return isTruthyEnv("LINKEDIN_ENABLE_ORG_SCOPES") || getLinkedInOrganizationIds().length > 0;
+  return isTruthyEnv("LINKEDIN_ORG_SCOPES_READY");
+}
+
+export function isLinkedInOrgScopesReady() {
+  return shouldRequestLinkedInOrgScopes();
 }
 
 export function getLinkedInScopes() {
@@ -169,7 +185,8 @@ export function getLinkedInConfigStatus() {
       issue: getLinkedInSetupIssue(),
       redirectUri: linkedInEnv.redirectUri,
       organizationIds,
-      enableOrgScopesEnv: readEnv("LINKEDIN_ENABLE_ORG_SCOPES"),
+      orgScopesReady: isLinkedInOrgScopesReady(),
+      enableOrgScopesEnv: readEnv("LINKEDIN_ORG_SCOPES_READY"),
       requestsOrgScopes: shouldRequestLinkedInOrgScopes(),
       requestedScopes,
     },

@@ -37,6 +37,7 @@ export function AccountsClient({
     serverRequestsOrgScopes: boolean;
     orgPostingEnabled: boolean;
     needsServerConfig: boolean;
+    awaitingApiApproval: boolean;
     configuredOrganizationIds: string[];
   }>({
     authenticated: false,
@@ -52,6 +53,7 @@ export function AccountsClient({
     serverRequestsOrgScopes: false,
     orgPostingEnabled: false,
     needsServerConfig: false,
+    awaitingApiApproval: false,
     configuredOrganizationIds: [],
   });
 
@@ -75,6 +77,7 @@ export function AccountsClient({
           ),
           orgPostingEnabled: Boolean(d.auth?.orgPostingEnabled),
           needsServerConfig: Boolean(d.auth?.needsServerConfig),
+          awaitingApiApproval: Boolean(d.auth?.awaitingApiApproval),
           configuredOrganizationIds:
             d.auth?.configuredOrganizationIds ||
             d.config?.linkedin?.organizationIds ||
@@ -110,6 +113,7 @@ export function AccountsClient({
       serverRequestsOrgScopes: false,
       orgPostingEnabled: false,
       needsServerConfig: false,
+      awaitingApiApproval: false,
       configuredOrganizationIds: [],
     });
   }
@@ -319,15 +323,11 @@ export function AccountsClient({
                       ? "Company page env not loaded on server"
                       : "Company page posting not enabled yet"}
                   </p>
-                  {(linkedIn.needsServerConfig || !linkedIn.serverRequestsOrgScopes) && (
-                    <p className="text-red-300 font-medium">
-                      Production is not requesting company-page scopes. In Vercel → Settings →
-                      Environment Variables, add for <strong>Production</strong>:{" "}
-                      <code className="text-[var(--primary)]">LINKEDIN_ORGANIZATION_IDS=102438302</code>
-                      , then redeploy. Server currently sees:{" "}
-                      {linkedIn.configuredOrganizationIds.length > 0
-                        ? linkedIn.configuredOrganizationIds.join(", ")
-                        : "none"}
+                  {(linkedIn.needsServerConfig || linkedIn.awaitingApiApproval) && (
+                    <p className="text-yellow-300 font-medium">
+                      {linkedIn.awaitingApiApproval
+                        ? "Community Management API is still under LinkedIn review. Use Reconnect now for profile-only access. After LinkedIn approves your app, set LINKEDIN_ORG_SCOPES_READY=true on Vercel, redeploy, then reconnect for company pages."
+                        : "LINKEDIN_ORGANIZATION_IDS is not loaded on the server. Add LINKEDIN_ORGANIZATION_IDS=102438302 on Vercel and redeploy."}
                     </p>
                   )}
                   {linkedIn.serverRequestsOrgScopes && (
@@ -343,7 +343,7 @@ export function AccountsClient({
                         <li>
                           Open{" "}
                           <a
-                            href="https://www.linkedin.com/developers/apps/788pjmplr6yaba/products"
+                            href="https://www.linkedin.com/developers/apps/78x7byxctnebwz/products"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[#0a66c2] hover:underline"
