@@ -1,8 +1,8 @@
 import "server-only";
 
 import { prisma } from "./prisma";
-import { encryptToken, decryptToken } from "./encryption";
-import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes, getLinkedInOrganizationIds, getLinkedInClientCredentials } from "./linkedin-config";
+import { encryptToken, decryptToken, safeDecryptToken } from "./encryption";
+import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes, getLinkedInOrganizationIds, getLinkedInClientCredentials, getLinkedInAppLabel } from "./linkedin-config";
 
 const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -298,8 +298,9 @@ export async function exchangeLinkedInCode(code: string, redirectUri?: string) {
   if (!res.ok) {
     const detail = await res.text();
     if (detail.includes("invalid_client")) {
+      const appLabel = getLinkedInAppLabel(clientId);
       throw new Error(
-        `Token exchange failed: invalid_client — LINKEDIN_CLIENT_SECRET does not match LINKEDIN_CLIENT_ID (${clientId}). In Vercel, edit both from Arfa CRM Community → Auth, then redeploy.`
+        `Token exchange failed: invalid_client — LINKEDIN_CLIENT_SECRET does not match LINKEDIN_CLIENT_ID (${clientId}). In Vercel, set both from ${appLabel} → Auth (same app), then redeploy.`
       );
     }
     throw new Error(`Token exchange failed: ${detail}`);
@@ -447,7 +448,7 @@ export async function getValidLinkedInAccessToken(userId: string) {
 
   let accessToken: string;
   try {
-    accessToken = decryptToken(conn.accessToken);
+    accessToken = safeDecryptToken(conn.accessToken);
   } catch {
     throw new Error(
       "LinkedIn token could not be decrypted. Disconnect and reconnect LinkedIn on this environment."
@@ -460,7 +461,7 @@ export async function getValidLinkedInAccessToken(userId: string) {
 
   if (!conn.refreshToken) return accessToken;
 
-  const refreshed = await refreshLinkedInToken(userId, decryptToken(conn.refreshToken));
+  const refreshed = await refreshLinkedInToken(userId, safeDecryptToken(conn.refreshToken));
   return refreshed || accessToken;
 }
 

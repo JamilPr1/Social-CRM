@@ -9,16 +9,32 @@ export async function GET() {
     const accounts = await getAccessibleAccounts(user);
     const health = await Promise.all(
       accounts.map(async (account) => {
-        const full = await prisma.metaAccount.findUnique({ where: { id: account.id } });
-        if (!full) return null;
-        const token = getDecryptedToken(full);
-        const status = await checkPageTokenHealth(token, !!full.instagramId);
-        return {
-          accountId: account.id,
-          pageName: account.pageName,
-          instagramUsername: account.instagramUsername,
-          ...status,
-        };
+        try {
+          const full = await prisma.metaAccount.findUnique({ where: { id: account.id } });
+          if (!full) return null;
+          const token = getDecryptedToken(full);
+          const status = await checkPageTokenHealth(token, !!full.instagramId);
+          return {
+            accountId: account.id,
+            pageName: account.pageName,
+            instagramUsername: account.instagramUsername,
+            ...status,
+          };
+        } catch (err) {
+          return {
+            accountId: account.id,
+            pageName: account.pageName,
+            instagramUsername: account.instagramUsername,
+            canPostFacebook: false,
+            canPostInstagram: false,
+            hasInstagramLinked: !!account.instagramId,
+            issues: [
+              err instanceof Error
+                ? err.message
+                : "Could not read saved Meta token for this page",
+            ],
+          };
+        }
       })
     );
 

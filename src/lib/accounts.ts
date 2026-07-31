@@ -1,7 +1,7 @@
 import "server-only";
 
 import { prisma } from "./prisma";
-import { decryptToken } from "./encryption";
+import { safeDecryptToken } from "./encryption";
 import { parsePermissions, hasPermission } from "./utils";
 import type { SafeAccount } from "@/types/account";
 import type { SessionUser } from "@/types/session";
@@ -76,7 +76,7 @@ export async function getAccountWithAccess(
 }
 
 export function getDecryptedToken(account: { pageAccessToken: string }) {
-  return decryptToken(account.pageAccessToken);
+  return safeDecryptToken(account.pageAccessToken);
 }
 
 export function logActivity(userId: string, action: string, details?: string) {
