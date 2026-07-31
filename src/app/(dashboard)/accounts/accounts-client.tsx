@@ -333,11 +333,34 @@ export function AccountsClient({
                   {linkedIn.serverRequestsOrgScopes && (
                     <>
                       <p className="text-[var(--muted)]">
-                        LinkedIn found your company page, but did not grant{" "}
-                        <code className="text-[var(--primary)]">w_organization_social</code>. Revoke
-                        the app, then reconnect for company pages.
+                        Vercel env is correct. LinkedIn approved your login but did{" "}
+                        <strong>not</strong> grant{" "}
+                        <code className="text-[var(--primary)]">w_organization_social</code> — this
+                        is controlled in the{" "}
+                        <strong>LinkedIn Developer Portal</strong>, not in this CRM.
                       </p>
                       <ol className="list-decimal list-inside space-y-2 text-[var(--muted)]">
+                        <li>
+                          Open{" "}
+                          <a
+                            href="https://www.linkedin.com/developers/apps/788pjmplr6yaba/products"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#0a66c2] hover:underline"
+                          >
+                            your app → Products
+                          </a>{" "}
+                          — <strong>Community Management API</strong> or{" "}
+                          <strong>Advertising API</strong> must show <strong>Approved</strong> (not
+                          pending)
+                        </li>
+                        <li>
+                          App → <strong>Settings</strong> → Associated page → link{" "}
+                          <strong>Arfa Developers</strong>
+                        </li>
+                        <li>
+                          You must be <strong>Page Admin</strong> on Arfa Developers on LinkedIn
+                        </li>
                         <li>
                           Revoke at{" "}
                           <a
@@ -346,11 +369,9 @@ export function AccountsClient({
                             rel="noopener noreferrer"
                             className="text-[#0a66c2] hover:underline"
                           >
-                            LinkedIn → Permitted services
+                            Permitted services
                           </a>
-                        </li>
-                        <li>
-                          Click <strong>Reconnect for company pages</strong> below
+                          , then <strong>Reconnect for company pages</strong>
                         </li>
                       </ol>
                     </>

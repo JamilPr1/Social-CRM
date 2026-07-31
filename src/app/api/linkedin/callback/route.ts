@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getSessionUser } from "@/lib/auth";
-import { exchangeLinkedInCode, fetchLinkedInProfile, saveLinkedInConnection, syncLinkedInOrganizations, getLinkedInConnection } from "@/lib/linkedin-api";
+import { exchangeLinkedInCode, fetchLinkedInProfile, saveLinkedInConnection, syncLinkedInOrganizations, getLinkedInConnection, probeLinkedInOrgPostingEnabled, connectionHasOrgScopes } from "@/lib/linkedin-api";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -40,8 +40,9 @@ export async function GET(request: NextRequest) {
     } catch {
       /* org scope may not be approved yet */
     }
+    await probeLinkedInOrgPostingEnabled(user.id);
     const conn = await getLinkedInConnection(user.id);
-    const hasOrgScope = conn?.grantedScopes?.includes("w_organization_social");
+    const hasOrgScope = connectionHasOrgScopes(conn);
     const redirect = hasOrgScope
       ? "/accounts?connected=linkedin"
       : "/accounts?connected=linkedin&org_warning=1";

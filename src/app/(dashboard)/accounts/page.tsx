@@ -37,7 +37,7 @@ export default async function AccountsPage({
       message:
         params.connected === "linkedin"
           ? params.org_warning === "1" && serverRequestsOrgScopes
-            ? "LinkedIn connected for your profile, but company-page permission was not granted. Revoke the app at LinkedIn Permitted Services, then click Reconnect for company pages."
+            ? "LinkedIn login succeeded, but w_organization_social was not granted. Your LinkedIn Developer app needs Community Management API or Advertising API approved — see the checklist on this page."
             : params.org_warning === "1"
               ? "LinkedIn connected, but LINKEDIN_ORGANIZATION_IDS is not loaded on the server. Redeploy Vercel after setting env vars."
               : "LinkedIn connected successfully!"
