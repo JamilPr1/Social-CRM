@@ -44,12 +44,22 @@ function isTruthyEnv(name: string): boolean {
   return value === "true" || value === "1" || value === "yes";
 }
 
+export const LINKEDIN_CMA_APP_CLIENT_ID = "78x7byxctnebwz";
+export const LINKEDIN_SHARE_APP_CLIENT_ID = "788pjmplr6yaba";
+
 export function getLinkedInClientId(): string {
   return readEnv("LINKEDIN_CLIENT_ID");
 }
 
 export function getLinkedInClientSecret(): string {
   return readEnv("LINKEDIN_CLIENT_SECRET");
+}
+
+/** My Post Scheduler has Share on LinkedIn — request w_member_social for profile posting. */
+export function shouldRequestLinkedInMemberScope(): boolean {
+  if (isLinkedInOrgScopesReady()) return true;
+  if (isTruthyEnv("LINKEDIN_INCLUDE_MEMBER_SCOPE")) return true;
+  return getLinkedInClientId() === LINKEDIN_SHARE_APP_CLIENT_ID;
 }
 
 export function getLinkedInAppLabel(clientId = getLinkedInClientId()): string {
@@ -78,7 +88,9 @@ export function getLinkedInCredentialsStatus() {
     secretLength: clientSecret.length,
     looksLikePlaceholder,
     expectedNewAppClientId: "78x7byxctnebwz",
-    clientIdMatchesNewApp: clientId === "78x7byxctnebwz",
+    clientIdMatchesNewApp: clientId === LINKEDIN_CMA_APP_CLIENT_ID,
+    clientIdMatchesShareApp: clientId === LINKEDIN_SHARE_APP_CLIENT_ID,
+    requestsMemberScope: shouldRequestLinkedInMemberScope(),
     redirectUri:
       readEnv("LINKEDIN_REDIRECT_URI") ||
       "https://social-crm-five.vercel.app/api/social/linkedin/callback",
@@ -121,7 +133,7 @@ export function getLinkedInScopes() {
   const base = ["openid", "profile", "email"];
   const postingScopes = isLinkedInOrgScopesReady()
     ? ["w_member_social", "w_organization_social", "r_organization_social"]
-    : isTruthyEnv("LINKEDIN_INCLUDE_MEMBER_SCOPE")
+    : shouldRequestLinkedInMemberScope()
       ? ["w_member_social"]
       : [];
   const extra = readEnv("LINKEDIN_EXTRA_SCOPES")
@@ -138,7 +150,7 @@ export function getLinkedInOAuthDebugInfo() {
     clientIdMatchesNewApp: getLinkedInClientId() === "78x7byxctnebwz",
     requestedScopes: getLinkedInScopes(),
     orgScopesReady: isLinkedInOrgScopesReady(),
-    includeMemberScope: isTruthyEnv("LINKEDIN_INCLUDE_MEMBER_SCOPE"),
+    includeMemberScope: shouldRequestLinkedInMemberScope(),
     extraScopesConfigured: extraScopesRaw.length > 0,
     extraScopes: extraScopesRaw
       ? extraScopesRaw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)

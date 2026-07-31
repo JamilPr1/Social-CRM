@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "./prisma";
 import { encryptToken, decryptToken, safeDecryptToken } from "./encryption";
-import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes, getLinkedInOrganizationIds, getLinkedInClientCredentials, getLinkedInAppLabel } from "./linkedin-config";
+import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes, shouldRequestLinkedInMemberScope, getLinkedInOrganizationIds, getLinkedInClientCredentials, getLinkedInAppLabel } from "./linkedin-config";
 
 const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -164,6 +164,22 @@ export async function getLinkedInPublishTargets(userId: string) {
   }
 
   return targets;
+}
+
+export function connectionHasMemberScopes(
+  conn: { grantedScopes?: string | null } | null
+): boolean {
+  if (!conn?.grantedScopes) return false;
+  try {
+    const scopes = JSON.parse(conn.grantedScopes) as string[];
+    return scopes.includes("w_member_social");
+  } catch {
+    return false;
+  }
+}
+
+export function linkedInMemberReconnectMessage() {
+  return "LinkedIn is connected for login only. Go to Accounts → Reconnect and approve posting permission (w_member_social) to publish posts and images.";
 }
 
 export function connectionHasOrgScopes(
@@ -465,6 +481,18 @@ export async function getValidLinkedInAccessToken(userId: string) {
   return refreshed || accessToken;
 }
 
+function linkedInPermissionError(err: unknown): string | null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!message.includes("ACCESS_DENIED") && !message.includes("403")) return null;
+  if (message.includes("initializeUpload") || message.includes("partnerApiImages")) {
+    return linkedInMemberReconnectMessage();
+  }
+  if (message.includes("w_organization_social") || message.includes("organization")) {
+    return linkedInOrgReconnectMessage();
+  }
+  return "LinkedIn permission denied. Reconnect on Accounts and approve all requested permissions.";
+}
+
 async function linkedInRawRequest(userId: string, path: string, options: RequestInit = {}) {
   const accessToken = await getValidLinkedInAccessToken(userId);
   if (!accessToken) throw new Error("Not authenticated with LinkedIn");
@@ -481,7 +509,10 @@ async function linkedInRawRequest(userId: string, path: string, options: Request
   });
 
   if (!res.ok) {
-    throw new Error(`LinkedIn API error (${res.status}): ${await res.text()}`);
+    const body = await res.text();
+    const base = `LinkedIn API error (${res.status}): ${body}`;
+    const friendly = linkedInPermissionError(new Error(base));
+    throw new Error(friendly || base);
   }
 
   const text = await res.text();
@@ -646,6 +677,9 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
     organizations,
     orgPostingEnabled: orgCaps.canPostToOrg,
     needsOrgReconnect: orgCaps.needsReconnect,
+    needsMemberReconnect:
+      shouldRequestLinkedInMemberScope() && !connectionHasMemberScopes(conn),
+    memberReconnectMessage: linkedInMemberReconnectMessage(),
     needsServerConfig: orgCaps.needsServerConfig,
     awaitingApiApproval: orgCaps.awaitingApiApproval,
     orgReconnectMessage: orgCaps.needsReconnect

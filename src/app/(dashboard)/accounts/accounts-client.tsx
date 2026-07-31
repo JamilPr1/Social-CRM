@@ -30,6 +30,8 @@ export function AccountsClient({
     email: string | null;
     organizations: Array<{ id: string; urn: string; name: string }>;
     needsOrgReconnect: boolean;
+    needsMemberReconnect: boolean;
+    memberReconnectMessage: string | null;
     orgReconnectMessage: string | null;
     publishTargetCount: number;
     grantedScopes: string[];
@@ -46,6 +48,8 @@ export function AccountsClient({
     email: null,
     organizations: [],
     needsOrgReconnect: false,
+    needsMemberReconnect: false,
+    memberReconnectMessage: null,
     orgReconnectMessage: null,
     publishTargetCount: 0,
     grantedScopes: [],
@@ -68,6 +72,8 @@ export function AccountsClient({
           email: d.auth?.profile?.email || null,
           organizations: d.auth?.organizations || [],
           needsOrgReconnect: Boolean(d.auth?.needsOrgReconnect),
+          needsMemberReconnect: Boolean(d.auth?.needsMemberReconnect),
+          memberReconnectMessage: d.auth?.memberReconnectMessage || null,
           orgReconnectMessage: d.auth?.orgReconnectMessage || null,
           publishTargetCount: d.auth?.publishTargetCount ?? 0,
           grantedScopes: d.auth?.grantedScopes || [],
@@ -106,6 +112,8 @@ export function AccountsClient({
       email: null,
       organizations: [],
       needsOrgReconnect: false,
+      needsMemberReconnect: false,
+      memberReconnectMessage: null,
       orgReconnectMessage: null,
       publishTargetCount: 0,
       grantedScopes: [],
@@ -319,6 +327,15 @@ export function AccountsClient({
                   {linkedIn.shared ? "Connected by admin · shared with team" : "Connected"}
                 </p>
               </div>
+              {linkedIn.needsMemberReconnect && (
+                <div className="p-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-sm">
+                  <p className="font-medium text-yellow-300">LinkedIn posting permission missing</p>
+                  <p className="text-[var(--muted)] mt-2">
+                    {linkedIn.memberReconnectMessage ||
+                      "Reconnect LinkedIn and approve posting permission (w_member_social) to publish posts and images."}
+                  </p>
+                </div>
+              )}
               {showLinkedInOrgSetup && (
                 <div className="p-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-sm space-y-3">
                   <p className="font-medium text-yellow-300">
@@ -425,15 +442,18 @@ export function AccountsClient({
                 <div className="flex gap-3 flex-wrap">
                   <a
                     href={
-                      showLinkedInOrgSetup && linkedIn.serverRequestsOrgScopes
+                      linkedIn.needsMemberReconnect ||
+                      (showLinkedInOrgSetup && linkedIn.serverRequestsOrgScopes)
                         ? "/api/linkedin/connect?consent=1"
                         : "/api/linkedin/connect"
                     }
                     className="text-sm px-4 py-2 rounded-lg border border-[#0a66c2] text-[#0a66c2] hover:bg-[#0a66c2]/10"
                   >
-                    {showLinkedInOrgSetup && linkedIn.serverRequestsOrgScopes
-                      ? "Reconnect for company pages"
-                      : "Reconnect"}
+                    {linkedIn.needsMemberReconnect
+                      ? "Reconnect for posting"
+                      : showLinkedInOrgSetup && linkedIn.serverRequestsOrgScopes
+                        ? "Reconnect for company pages"
+                        : "Reconnect"}
                   </a>
                   <button
                     onClick={disconnectLinkedIn}
