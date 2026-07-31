@@ -7,6 +7,9 @@ import {
 } from "@/lib/linkedin-api";
 import { getLinkedInConfigStatus } from "@/lib/linkedin-config";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export async function GET() {
   return withAuth(async (user) => {
     const ownerId = await resolveLinkedInOwnerId(user.id);

@@ -1,8 +1,10 @@
 import { getSessionUser } from "@/lib/auth";
 import { getAccessibleAccounts } from "@/lib/accounts";
-import { getLinkedInOrganizationIds } from "@/lib/linkedin-config";
+import { getLinkedInOrganizationIds, shouldRequestLinkedInOrgScopes } from "@/lib/linkedin-config";
 import { getExtraMetaPageIds } from "@/lib/meta-api";
 import { AccountsClient } from "./accounts-client";
+
+export const dynamic = "force-dynamic";
 
 const ERROR_MESSAGES: Record<string, string> = {
   no_pages:
@@ -25,16 +27,20 @@ export default async function AccountsPage({
 
   const params = await searchParams;
   const accounts = await getAccessibleAccounts(user);
+  const linkedInOrgIds = getLinkedInOrganizationIds();
+  const serverRequestsOrgScopes = shouldRequestLinkedInOrgScopes();
 
   let notice: { type: "success" | "error"; message: string } | null = null;
   if (params.connected === "true" || params.connected === "linkedin") {
     notice = {
-      type: params.org_warning === "1" ? "error" : "success",
+      type: params.org_warning === "1" && serverRequestsOrgScopes ? "error" : "success",
       message:
         params.connected === "linkedin"
-          ? params.org_warning === "1"
-            ? "LinkedIn connected for your profile, but organization posting was not granted. Enable company-page access in LinkedIn Developer Portal, confirm LINKEDIN_ORGANIZATION_IDS=102438302 on Vercel, redeploy, then reconnect."
-            : "LinkedIn connected successfully!"
+          ? params.org_warning === "1" && serverRequestsOrgScopes
+            ? "LinkedIn connected for your profile, but company-page permission was not granted. Revoke the app at LinkedIn Permitted Services, then click Reconnect for company pages."
+            : params.org_warning === "1"
+              ? "LinkedIn connected, but LINKEDIN_ORGANIZATION_IDS is not loaded on the server. Redeploy Vercel after setting env vars."
+              : "LinkedIn connected successfully!"
           : "Account connected successfully!",
     };
   } else if (params.error) {
@@ -51,8 +57,9 @@ export default async function AccountsPage({
       notice={notice}
       errorCode={params.error}
       serverRuntimeConfig={{
-        linkedInOrganizationIds: getLinkedInOrganizationIds(),
+        linkedInOrganizationIds: linkedInOrgIds,
         metaExtraPageIds: getExtraMetaPageIds(),
+        serverRequestsOrgScopes,
       }}
     />
   );

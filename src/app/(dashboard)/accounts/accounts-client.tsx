@@ -20,6 +20,7 @@ export function AccountsClient({
   serverRuntimeConfig?: {
     linkedInOrganizationIds: string[];
     metaExtraPageIds: string[];
+    serverRequestsOrgScopes?: boolean;
   };
 }) {
   const [linkedIn, setLinkedIn] = useState<{
@@ -75,7 +76,10 @@ export function AccountsClient({
           orgPostingEnabled: Boolean(d.auth?.orgPostingEnabled),
           needsServerConfig: Boolean(d.auth?.needsServerConfig),
           configuredOrganizationIds:
-            d.auth?.configuredOrganizationIds || d.config?.linkedin?.organizationIds || [],
+            d.auth?.configuredOrganizationIds ||
+            d.config?.linkedin?.organizationIds ||
+            serverRuntimeConfig?.linkedInOrganizationIds ||
+            [],
         })
       );
   }, []);
@@ -201,10 +205,18 @@ export function AccountsClient({
         </ul>
         <p className="text-xs text-yellow-400/90 mt-3">
           Facebook only allows posting to <strong>Pages</strong>, not personal profiles. If a Page
-          is missing, click <strong>Refresh pages</strong>. Server extra Page IDs:{" "}
+          is missing, click <strong>Refresh pages</strong>. Server env check — Meta extra Page IDs:{" "}
           {serverRuntimeConfig?.metaExtraPageIds.length
             ? serverRuntimeConfig.metaExtraPageIds.join(", ")
-            : "none — add META_EXTRA_PAGE_IDS on Vercel (e.g. 61592773134015)"}
+            : "none"}
+          {" · "}
+          LinkedIn org IDs:{" "}
+          {serverRuntimeConfig?.linkedInOrganizationIds.length
+            ? serverRuntimeConfig.linkedInOrganizationIds.join(", ")
+            : "none (set LINKEDIN_ORGANIZATION_IDS=102438302 on Vercel and redeploy)"}
+          {serverRuntimeConfig?.serverRequestsOrgScopes === false && (
+            <span className="text-red-400"> — org scopes not enabled on server</span>
+          )}
         </p>
       </div>
 

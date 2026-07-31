@@ -33,18 +33,30 @@ export const linkedInEnv = {
 };
 
 /** Read at call time so Vercel runtime env vars are always picked up. */
+function readEnv(name: string): string {
+  const raw = process.env[name];
+  if (!raw) return "";
+  return raw.trim().replace(/^["']|["']$/g, "");
+}
+
+function isTruthyEnv(name: string): boolean {
+  const value = readEnv(name).toLowerCase();
+  return value === "true" || value === "1" || value === "yes";
+}
+
 export function getLinkedInOrganizationIds(): string[] {
-  return (process.env.LINKEDIN_ORGANIZATION_IDS || "")
+  const raw =
+    readEnv("LINKEDIN_ORGANIZATION_IDS") ||
+    readEnv("LINKEDIN_ORGANIZATION_ID") ||
+    readEnv("LINKEDIN_ORG_IDS");
+  return raw
     .split(/[\s,]+/)
-    .map((id) => id.trim())
+    .map((id) => id.trim().replace(/^["']|["']$/g, ""))
     .filter(Boolean);
 }
 
 export function shouldRequestLinkedInOrgScopes() {
-  return (
-    process.env.LINKEDIN_ENABLE_ORG_SCOPES === "true" ||
-    getLinkedInOrganizationIds().length > 0
-  );
+  return isTruthyEnv("LINKEDIN_ENABLE_ORG_SCOPES") || getLinkedInOrganizationIds().length > 0;
 }
 
 export function getLinkedInScopes() {
@@ -110,12 +122,14 @@ export function getGoogleSheetsSetupIssue() {
 
 export function getLinkedInConfigStatus() {
   const requestedScopes = getLinkedInScopes();
+  const organizationIds = getLinkedInOrganizationIds();
   return {
     linkedin: {
       configured: isLinkedInConfigured(),
       issue: getLinkedInSetupIssue(),
       redirectUri: linkedInEnv.redirectUri,
-      organizationIds: getLinkedInOrganizationIds(),
+      organizationIds,
+      enableOrgScopesEnv: readEnv("LINKEDIN_ENABLE_ORG_SCOPES"),
       requestsOrgScopes: shouldRequestLinkedInOrgScopes(),
       requestedScopes,
     },
