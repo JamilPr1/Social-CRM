@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "./prisma";
 import { encryptToken, decryptToken } from "./encryption";
-import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes } from "./linkedin-config";
+import { linkedInEnv, getLinkedInScopes, shouldRequestLinkedInOrgScopes, getLinkedInOrganizationIds } from "./linkedin-config";
 
 const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -104,7 +104,7 @@ async function fetchLinkedInOrganizationById(
 }
 
 async function fetchLinkedInOrganizationsFromEnv(userId: string): Promise<LinkedInManagedOrg[]> {
-  const ids = linkedInEnv.organizationIds;
+  const ids = getLinkedInOrganizationIds();
   if (ids.length === 0) return [];
 
   const orgs: LinkedInManagedOrg[] = [];
@@ -152,7 +152,7 @@ export async function getLinkedInPublishTargets(userId: string) {
   for (const org of parseManagedOrganizations(conn.managedOrganizations)) {
     orgMap.set(org.urn, org);
   }
-  for (const org of linkedInEnv.organizationIds) {
+  for (const org of getLinkedInOrganizationIds()) {
     const urn = `urn:li:organization:${org}`;
     if (!orgMap.has(urn)) {
       const displayName = org === "102438302" ? "Arfa Developers" : `Company Page ${org}`;
@@ -198,7 +198,7 @@ export async function probeLinkedInOrgPostingEnabled(userId: string): Promise<bo
   if (connectionHasOrgScopes(conn)) return true;
   if (!shouldRequestLinkedInOrgScopes()) return false;
 
-  const orgId = linkedInEnv.organizationIds[0];
+  const orgId = getLinkedInOrganizationIds()[0];
   if (!orgId) return false;
 
   try {
@@ -231,15 +231,20 @@ export async function probeLinkedInOrgPostingEnabled(userId: string): Promise<bo
 export async function resolveLinkedInOrgCapabilities(userId: string) {
   const conn = await getLinkedInConnection(userId);
   const wantsOrg = shouldRequestLinkedInOrgScopes();
+  const configuredOrgIds = getLinkedInOrganizationIds();
   let canPostToOrg = connectionHasOrgScopes(conn);
   if (!canPostToOrg && wantsOrg) {
     canPostToOrg = await probeLinkedInOrgPostingEnabled(userId);
   }
   const missingFromToken =
     wantsOrg && !canPostToOrg && Boolean(conn?.grantedScopes) && !connectionHasOrgScopes(conn);
+  const hasKnownOrg =
+    configuredOrgIds.length > 0 ||
+    parseManagedOrganizations(conn?.managedOrganizations).length > 0;
   return {
     canPostToOrg,
     needsReconnect: wantsOrg && !canPostToOrg,
+    needsServerConfig: !wantsOrg && hasKnownOrg && !canPostToOrg,
     missingFromToken,
   };
 }
@@ -617,12 +622,16 @@ export async function getLinkedInAuthStatus(actingUserId: string) {
     organizations,
     orgPostingEnabled: orgCaps.canPostToOrg,
     needsOrgReconnect: orgCaps.needsReconnect,
+    needsServerConfig: orgCaps.needsServerConfig,
     orgReconnectMessage: orgCaps.needsReconnect
       ? linkedInOrgReconnectMessage(orgCaps.missingFromToken)
-      : null,
+      : orgCaps.needsServerConfig
+        ? "LINKEDIN_ORGANIZATION_IDS is not loaded on the server. Add it in Vercel (Production), redeploy, then reconnect LinkedIn."
+        : null,
     grantedScopes: grantedScopeList,
     requestedScopes: getLinkedInScopes(),
     serverRequestsOrgScopes: shouldRequestLinkedInOrgScopes(),
+    configuredOrganizationIds: getLinkedInOrganizationIds(),
     publishTargetCount: publishTargets.length,
   };
 }

@@ -30,16 +30,20 @@ export const linkedInEnv = {
   userPhone: process.env.USER_PHONE || "",
   userLinkedInUrl: process.env.USER_LINKEDIN_URL || "",
   userResumePath: process.env.USER_RESUME_PATH || join(process.cwd(), "data", "resume.txt"),
-  organizationIds: (process.env.LINKEDIN_ORGANIZATION_IDS || "")
+};
+
+/** Read at call time so Vercel runtime env vars are always picked up. */
+export function getLinkedInOrganizationIds(): string[] {
+  return (process.env.LINKEDIN_ORGANIZATION_IDS || "")
     .split(/[\s,]+/)
     .map((id) => id.trim())
-    .filter(Boolean),
-};
+    .filter(Boolean);
+}
 
 export function shouldRequestLinkedInOrgScopes() {
   return (
     process.env.LINKEDIN_ENABLE_ORG_SCOPES === "true" ||
-    linkedInEnv.organizationIds.length > 0
+    getLinkedInOrganizationIds().length > 0
   );
 }
 
@@ -111,7 +115,7 @@ export function getLinkedInConfigStatus() {
       configured: isLinkedInConfigured(),
       issue: getLinkedInSetupIssue(),
       redirectUri: linkedInEnv.redirectUri,
-      organizationIds: linkedInEnv.organizationIds,
+      organizationIds: getLinkedInOrganizationIds(),
       requestsOrgScopes: shouldRequestLinkedInOrgScopes(),
       requestedScopes,
     },

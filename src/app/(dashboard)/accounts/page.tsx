@@ -1,5 +1,7 @@
 import { getSessionUser } from "@/lib/auth";
 import { getAccessibleAccounts } from "@/lib/accounts";
+import { getLinkedInOrganizationIds } from "@/lib/linkedin-config";
+import { getExtraMetaPageIds } from "@/lib/meta-api";
 import { AccountsClient } from "./accounts-client";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -48,6 +50,10 @@ export default async function AccountsPage({
       isAdmin={user.role === "ADMIN"}
       notice={notice}
       errorCode={params.error}
+      serverRuntimeConfig={{
+        linkedInOrganizationIds: getLinkedInOrganizationIds(),
+        metaExtraPageIds: getExtraMetaPageIds(),
+      }}
     />
   );
 }

@@ -11,11 +11,16 @@ export function AccountsClient({
   isAdmin,
   notice,
   errorCode,
+  serverRuntimeConfig,
 }: {
   accounts: SafeAccount[];
   isAdmin: boolean;
   notice?: { type: "success" | "error"; message: string } | null;
   errorCode?: string;
+  serverRuntimeConfig?: {
+    linkedInOrganizationIds: string[];
+    metaExtraPageIds: string[];
+  };
 }) {
   const [linkedIn, setLinkedIn] = useState<{
     authenticated: boolean;
@@ -29,6 +34,9 @@ export function AccountsClient({
     grantedScopes: string[];
     requestedScopes: string[];
     serverRequestsOrgScopes: boolean;
+    orgPostingEnabled: boolean;
+    needsServerConfig: boolean;
+    configuredOrganizationIds: string[];
   }>({
     authenticated: false,
     shared: false,
@@ -41,6 +49,9 @@ export function AccountsClient({
     grantedScopes: [],
     requestedScopes: [],
     serverRequestsOrgScopes: false,
+    orgPostingEnabled: false,
+    needsServerConfig: false,
+    configuredOrganizationIds: [],
   });
 
   useEffect(() => {
@@ -61,6 +72,10 @@ export function AccountsClient({
           serverRequestsOrgScopes: Boolean(
             d.auth?.serverRequestsOrgScopes ?? d.config?.linkedin?.requestsOrgScopes
           ),
+          orgPostingEnabled: Boolean(d.auth?.orgPostingEnabled),
+          needsServerConfig: Boolean(d.auth?.needsServerConfig),
+          configuredOrganizationIds:
+            d.auth?.configuredOrganizationIds || d.config?.linkedin?.organizationIds || [],
         })
       );
   }, []);
@@ -89,8 +104,17 @@ export function AccountsClient({
       grantedScopes: [],
       requestedScopes: [],
       serverRequestsOrgScopes: false,
+      orgPostingEnabled: false,
+      needsServerConfig: false,
+      configuredOrganizationIds: [],
     });
   }
+
+  const showLinkedInOrgSetup =
+    linkedIn.authenticated &&
+    isAdmin &&
+    !linkedIn.orgPostingEnabled &&
+    (linkedIn.needsOrgReconnect || linkedIn.needsServerConfig || linkedIn.organizations.length > 0);
 
   return (
     <div>
@@ -167,15 +191,20 @@ export function AccountsClient({
           {linkedIn.organizations.map((org) => (
             <li key={org.urn}>
               <span className="text-white">LinkedIn:</span> {org.name} (company page)
-              {linkedIn.needsOrgReconnect ? " — reconnect required" : ""}
+              {!linkedIn.orgPostingEnabled ? (
+                <span className="text-yellow-400"> — permission pending</span>
+              ) : (
+                <span className="text-green-400"> — ready</span>
+              )}
             </li>
           ))}
         </ul>
         <p className="text-xs text-yellow-400/90 mt-3">
-          Facebook only allows posting to <strong>Pages</strong>, not personal profiles. If
-          &quot;Muhammad Arshad&quot; is a Page, click <strong>Refresh pages</strong> — or add its
-          Page ID to <code className="text-[var(--primary)]">META_EXTRA_PAGE_IDS</code> on Vercel
-          (61592773134015).
+          Facebook only allows posting to <strong>Pages</strong>, not personal profiles. If a Page
+          is missing, click <strong>Refresh pages</strong>. Server extra Page IDs:{" "}
+          {serverRuntimeConfig?.metaExtraPageIds.length
+            ? serverRuntimeConfig.metaExtraPageIds.join(", ")
+            : "none — add META_EXTRA_PAGE_IDS on Vercel (e.g. 61592773134015)"}
         </p>
       </div>
 
@@ -271,63 +300,49 @@ export function AccountsClient({
                   {linkedIn.shared ? "Connected by admin · shared with team" : "Connected"}
                 </p>
               </div>
-              {linkedIn.needsOrgReconnect && isAdmin && (
+              {showLinkedInOrgSetup && (
                 <div className="p-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-sm space-y-3">
                   <p className="font-medium text-yellow-300">
-                    Company page posting not enabled yet
+                    {linkedIn.needsServerConfig
+                      ? "Company page env not loaded on server"
+                      : "Company page posting not enabled yet"}
                   </p>
-                  {!linkedIn.serverRequestsOrgScopes && (
+                  {(linkedIn.needsServerConfig || !linkedIn.serverRequestsOrgScopes) && (
                     <p className="text-red-300 font-medium">
-                      Server is not requesting company-page scopes. Add{" "}
-                      <code className="text-[var(--primary)]">LINKEDIN_ORGANIZATION_IDS=102438302</code>{" "}
-                      on Vercel, redeploy, then reconnect below.
+                      Production is not requesting company-page scopes. In Vercel → Settings →
+                      Environment Variables, add for <strong>Production</strong>:{" "}
+                      <code className="text-[var(--primary)]">LINKEDIN_ORGANIZATION_IDS=102438302</code>
+                      , then redeploy. Server currently sees:{" "}
+                      {linkedIn.configuredOrganizationIds.length > 0
+                        ? linkedIn.configuredOrganizationIds.join(", ")
+                        : "none"}
                     </p>
                   )}
-                  <p className="text-[var(--muted)]">
-                    LinkedIn only shows a login screen when your app is already authorized with
-                    old permissions. You must revoke the app first, then reconnect so LinkedIn can
-                    grant <code className="text-[var(--primary)]">w_organization_social</code>.
-                  </p>
-                  <ol className="list-decimal list-inside space-y-2 text-[var(--muted)]">
-                    <li>
-                      Revoke this app at{" "}
-                      <a
-                        href="https://www.linkedin.com/psettings/permitted-services"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#0a66c2] hover:underline"
-                      >
-                        LinkedIn → Permitted services
-                      </a>{" "}
-                      (remove <strong>My Post Scheduler</strong>)
-                    </li>
-                    <li>
-                      On Vercel, confirm{" "}
-                      <code className="text-[var(--primary)]">
-                        LINKEDIN_ORGANIZATION_IDS=102438302
-                      </code>{" "}
-                      and redeploy
-                    </li>
-                    <li>
-                      Open{" "}
-                      <a
-                        href="https://www.linkedin.com/developers/apps"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#0a66c2] hover:underline"
-                      >
-                        LinkedIn Developer Portal
-                      </a>{" "}
-                      → your app → Products: Community Management API or Advertising API approved
-                    </li>
-                    <li>
-                      Settings → Associated page → link <strong>Arfa Developers</strong>
-                    </li>
-                    <li>
-                      Click <strong>Reconnect for company pages</strong> below (forces a fresh
-                      permission screen)
-                    </li>
-                  </ol>
+                  {linkedIn.serverRequestsOrgScopes && (
+                    <>
+                      <p className="text-[var(--muted)]">
+                        LinkedIn found your company page, but did not grant{" "}
+                        <code className="text-[var(--primary)]">w_organization_social</code>. Revoke
+                        the app, then reconnect for company pages.
+                      </p>
+                      <ol className="list-decimal list-inside space-y-2 text-[var(--muted)]">
+                        <li>
+                          Revoke at{" "}
+                          <a
+                            href="https://www.linkedin.com/psettings/permitted-services"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[#0a66c2] hover:underline"
+                          >
+                            LinkedIn → Permitted services
+                          </a>
+                        </li>
+                        <li>
+                          Click <strong>Reconnect for company pages</strong> below
+                        </li>
+                      </ol>
+                    </>
+                  )}
                   <p className="text-xs text-[var(--muted)]">
                     Requested by server:{" "}
                     {linkedIn.requestedScopes.length > 0
@@ -351,14 +366,21 @@ export function AccountsClient({
               {linkedIn.organizations.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium text-[var(--muted)] uppercase tracking-wide">
-                    Company pages (posts go here too)
+                    Company pages
                   </p>
                   {linkedIn.organizations.map((org) => (
                     <div
                       key={org.urn}
-                      className="p-3 rounded-lg border border-[var(--border)] text-sm"
+                      className="p-3 rounded-lg border border-[var(--border)] text-sm flex items-center justify-between gap-2"
                     >
-                      {org.name}
+                      <span>{org.name}</span>
+                      <span
+                        className={`text-xs ${
+                          linkedIn.orgPostingEnabled ? "text-green-400" : "text-yellow-400"
+                        }`}
+                      >
+                        {linkedIn.orgPostingEnabled ? "Posts enabled" : "Permission pending"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -367,13 +389,15 @@ export function AccountsClient({
                 <div className="flex gap-3 flex-wrap">
                   <a
                     href={
-                      linkedIn.needsOrgReconnect
+                      showLinkedInOrgSetup && linkedIn.serverRequestsOrgScopes
                         ? "/api/linkedin/connect?consent=1"
                         : "/api/linkedin/connect"
                     }
                     className="text-sm px-4 py-2 rounded-lg border border-[#0a66c2] text-[#0a66c2] hover:bg-[#0a66c2]/10"
                   >
-                    {linkedIn.needsOrgReconnect ? "Reconnect for company pages" : "Reconnect"}
+                    {showLinkedInOrgSetup && linkedIn.serverRequestsOrgScopes
+                      ? "Reconnect for company pages"
+                      : "Reconnect"}
                   </a>
                   <button
                     onClick={disconnectLinkedIn}
